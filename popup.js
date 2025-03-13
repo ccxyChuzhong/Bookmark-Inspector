@@ -239,7 +239,62 @@ function renderBookmarks(bookmarks) {
   // 更新计数器
   updateCounters();
 }
-
+// ... existing code ...
+// 重新检查单个书签
+async function recheckBookmark(bookmarkId) {
+  try {
+    // 查找书签
+    const bookmarks = await chrome.bookmarks.get(bookmarkId);
+    if (!bookmarks || bookmarks.length === 0) {
+      showMessage("找不到该书签", true);
+      return;
+    }
+    
+    const bookmark = bookmarks[0];
+    
+    // 显示检测中的消息
+    showMessage("正在重新检查书签...");
+    
+    // 检查URL可用性
+    const isAvailable = await checkUrlAvailability(bookmark.url);
+    
+    // 更新结果数组中的状态
+    const index = checkingStatus.results.findIndex(r => r.url === bookmark.url);
+    if (index !== -1) {
+      checkingStatus.results[index].status = isAvailable;
+      
+      // 保存更新后的结果
+      saveCheckResults();
+    }
+    
+    // 如果书签恢复可用，从失效列表中移除
+    if (isAvailable) {
+      const itemToRemove = document.querySelector(
+        `#invalidList [data-bookmark-id="${bookmarkId}"]`
+      );
+      if (itemToRemove) {
+        itemToRemove.remove();
+      }
+      
+      // 检查是否还有其他失效书签
+      const remainingInvalidItems = document.querySelectorAll("#invalidList .invalid-bookmark-item");
+      if (remainingInvalidItems.length === 0) {
+        document.getElementById("invalidBookmarks").style.display = "none";
+      }
+      
+      // 更新主结果列表中对应的项
+      updateResultsUI();
+      
+      showMessage("书签已恢复可用");
+    } else {
+      showMessage("书签仍然不可用", true);
+    }
+  } catch (error) {
+    console.error("重新检查书签时出错:", error);
+    showMessage("重新检查失败: " + error.message, true);
+  }
+}
+// ... existing code ...
 // 更新计数器函数
 function updateCounters() {
   const totalCount = currentBookmarks.length;
@@ -313,33 +368,178 @@ function getAllBookmarks() {
   });
 }
 
-// 导出书签为JSON文件
-async function exportBookmarks() {
+// 导出书签为HTML格式
+async function exportBookmarksAsHTML(selectedFolder = 'all') {
   try {
     const bookmarks = await getAllBookmarks();
-    const bookmarksJson = JSON.stringify(bookmarks, null, 2);
+    let htmlContent = '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n';
+    htmlContent += '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n';
+    htmlContent += '<TITLE>Bookmarks</TITLE>\n';
+    htmlContent += '<H1>Bookmarks</H1>\n';
+    htmlContent += '<DL><p>\n';
 
-    // 创建下载链接
-    const blob = new Blob([bookmarksJson], { type: "application/json" });
+    function processNode(node, level = 0) {
+      const indent = '    '.repeat(level);
+      if (selectedFolder !== 'all' && !isNodeInFolder(node, selectedFolder)) {
+        return;
+      }
+      if (node.children) {
+        htmlContent += `${indent}<DT><H3>${node.title}</H3>\n`;
+        htmlContent += `${indent}<DL><p>\n`;
+        node.children.forEach(child => processNode(child, level + 1));
+        htmlContent += `${indent}</DL><p>\n`;
+      } else if (node.url) {
+        htmlContent += `${indent}<DT><A HREF="${node.url}">${node.title}</A>\n`;
+      }
+    }
+
+    bookmarks[0].children.forEach(node => processNode(node));
+    htmlContent += '</DL><p>';
+
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-
-    // 生成当前日期作为文件名的一部分
     const date = new Date().toISOString().slice(0, 10);
-    const filename = `edge_bookmarks_${date}.json`;
+    const filename = `edge_bookmarks_${date}.html`;
 
-    // 创建下载链接并点击
-    const a = document.createElement("a");
+    const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     a.click();
 
-    // 清理URL对象
     setTimeout(() => URL.revokeObjectURL(url), 100);
-
-    showMessage("书签导出成功！");
+    showMessage('书签导出成功！');
   } catch (error) {
-    showMessage("导出失败: " + error.message);
+    showMessage('导出失败: ' + error.message);
   }
+}
+
+// 导出书签为CSV格式
+async function exportBookmarksAsCSV() {
+  try {
+    const bookmarks = await getAllBookmarks();
+    let csvContent = '标题,网址,文件夹\n';
+
+    function processNode(node, folderPath = '') {
+      if (node.url) {
+        const title = node.title.replace(/"/g, '""');
+        csvContent += `"${title}","${node.url}","${folderPath}"\n`;
+      } else if (node.children) {
+        const newPath = folderPath ? `${folderPath}/${node.title}` : node.title;
+        node.children.forEach(child => processNode(child, newPath));
+      }
+    }
+
+    bookmarks[0].children.forEach(node => processNode(node));
+
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const date = new Date().toISOString().slice(0, 10);
+    const filename = `edge_bookmarks_${date}.csv`;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+    showMessage('书签导出成功！');
+  } catch (error) {
+    showMessage('导出失败: ' + error.message);
+  }
+}
+
+// 导出书签为Markdown格式
+async function exportBookmarksAsMarkdown() {
+  try {
+    const bookmarks = await getAllBookmarks();
+    let mdContent = '# 书签列表\n\n';
+
+    function processNode(node, level = 1) {
+      if (node.url) {
+        mdContent += `${'  '.repeat(level - 1)}- [${node.title}](${node.url})\n`;
+      } else if (node.children) {
+        if (node.title) {
+          mdContent += `\n${'#'.repeat(level)} ${node.title}\n\n`;
+        }
+        node.children.forEach(child => processNode(child, level + 1));
+      }
+    }
+
+    bookmarks[0].children.forEach(node => processNode(node));
+
+    const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const date = new Date().toISOString().slice(0, 10);
+    const filename = `edge_bookmarks_${date}.md`;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+    showMessage('书签导出成功！');
+  } catch (error) {
+    showMessage('导出失败: ' + error.message);
+  }
+}
+
+// 修改原有的exportBookmarks函数名为exportBookmarksAsJSON
+async function exportBookmarksAsJSON(selectedFolder = 'all') {
+  try {
+    const bookmarks = await getAllBookmarks();
+    
+    // 如果选择了特定文件夹，筛选书签
+    let bookmarksToExport = bookmarks;
+    if (selectedFolder !== 'all') {
+      // 为节点添加路径信息
+      addPathToNodes(bookmarks);
+      
+      // 筛选出选定文件夹下的书签
+      bookmarksToExport = filterBookmarksByFolder(bookmarks, selectedFolder);
+    }
+    
+    const bookmarksJson = JSON.stringify(bookmarksToExport, null, 2);
+
+    const blob = new Blob([bookmarksJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const date = new Date().toISOString().slice(0, 10);
+    const filename = `edge_bookmarks_${date}.json`;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+    showMessage('书签导出成功！');
+  } catch (error) {
+    showMessage('导出失败: ' + error.message);
+  }
+}
+
+// 筛选特定文件夹下的书签
+function filterBookmarksByFolder(bookmarks, folderId) {
+  // 查找指定文件夹
+  function findFolder(nodes, id) {
+    for (const node of nodes) {
+      if (node.id === id) {
+        return node;
+      }
+      if (node.children) {
+        const found = findFolder(node.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  
+  // 查找指定文件夹
+  const folder = findFolder(bookmarks, folderId);
+  if (!folder) return bookmarks; // 如果找不到文件夹，返回所有书签
+  
+  // 创建一个新的书签树，只包含选定的文件夹
+  return [folder];
 }
 
 // 显示消息函数
@@ -474,6 +674,37 @@ async function initFolderSelect() {
 
 // 页面加载完成后添加事件监听器
 document.addEventListener("DOMContentLoaded", async () => {
+  // 导出按钮点击事件处理
+  const exportBtn = document.getElementById('exportBtn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', showExportModal);
+  }
+  const exportFormat = document.getElementById('exportFormat');
+  const folderSelect = document.getElementById('folderSelect');
+
+  if (exportBtn && exportFormat) {
+    exportBtn.addEventListener('click', async () => {
+      const format = exportFormat.value;
+      const selectedFolder = folderSelect ? folderSelect.value : 'all';
+      switch (format) {
+        case 'json':
+          await exportBookmarksAsJSON(selectedFolder);
+          break;
+        case 'html':
+          await exportBookmarksAsHTML(selectedFolder);
+          break;
+        case 'csv':
+          await exportBookmarksAsCSV(selectedFolder);
+          break;
+        case 'markdown':
+          await exportBookmarksAsMarkdown(selectedFolder);
+          break;
+        default:
+          showMessage('不支持的导出格式');
+      }
+    });
+  }
+
   // 从存储中获取之前的检测结果
   try {
     const data = await chrome.storage.local.get("bookmarkCheckResults");
@@ -498,12 +729,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 其他初始化代码...
 
-  // 导出按钮事件监听
-  const exportBtn = document.getElementById("exportBtn");
-  if (exportBtn) {
-    exportBtn.addEventListener("click", exportBookmarks);
-  }
-
   // 导入文件选择事件监听
   const importFile = document.getElementById("importFile");
   if (importFile) {
@@ -520,7 +745,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   initFolderSelect();
 
   // 文件夹选择变化事件监听
-  const folderSelect = document.getElementById("folderSelect");
   if (folderSelect) {
     folderSelect.addEventListener("change", function () {
       // 清空结果显示
@@ -1803,5 +2027,108 @@ function addCustomStyles() {
     
     // 将样式添加到文档头部
     document.head.appendChild(styleElement);
+  });
+}
+
+// 显示导出书签弹框
+function showExportModal() {
+  // 创建模态框HTML
+  const modalHTML = `
+    <div class="modal-overlay" id="exportModal">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h3>导出书签</h3>
+          <button class="modal-close-btn" id="modalCloseBtn">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="modal-content">
+          <div class="modal-section">
+            <label for="modalExportFormat">导出格式：</label>
+            <select id="modalExportFormat" class="modal-select">
+              <option value="json">JSON格式</option>
+              <option value="html">HTML格式</option>
+              <option value="csv">CSV格式</option>
+              <option value="markdown">Markdown格式</option>
+            </select>
+          </div>
+          <div class="modal-section">
+            <label for="modalFolderSelect">选择文件夹：</label>
+            <select id="modalFolderSelect" class="modal-select">
+              <option value="all">全部文件夹</option>
+              <!-- 文件夹选项将通过JavaScript动态添加 -->
+            </select>
+          </div>
+          <div class="modal-buttons">
+            <button class="btn secondary-btn" id="modalCancelBtn">取消</button>
+            <button class="btn primary-btn" id="modalExportBtn">导出</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // 添加模态框到页面
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  // 获取模态框元素
+  const exportModal = document.getElementById('exportModal');
+  const modalCloseBtn = document.getElementById('modalCloseBtn');
+  const modalCancelBtn = document.getElementById('modalCancelBtn');
+  const modalExportBtn = document.getElementById('modalExportBtn');
+  const modalFolderSelect = document.getElementById('modalFolderSelect');
+  
+  // 关闭模态框函数
+  const closeModal = () => {
+    if (exportModal) {
+      document.body.removeChild(exportModal);
+    }
+  };
+  
+  // 添加事件监听器
+  modalCloseBtn.addEventListener('click', closeModal);
+  modalCancelBtn.addEventListener('click', closeModal);
+  
+  // 导出按钮点击事件
+  modalExportBtn.addEventListener('click', async () => {
+    const formatSelect = document.getElementById('modalExportFormat');
+    const format = formatSelect.value;
+    const selectedFolder = modalFolderSelect.value;
+    
+    // 关闭模态框
+    closeModal();
+    
+    // 根据选择的格式导出书签
+    switch (format) {
+      case 'json':
+        await exportBookmarksAsJSON(selectedFolder);
+        break;
+      case 'html':
+        await exportBookmarksAsHTML(selectedFolder);
+        break;
+      case 'csv':
+        await exportBookmarksAsCSV(selectedFolder);
+        break;
+      case 'markdown':
+        await exportBookmarksAsMarkdown(selectedFolder);
+        break;
+      default:
+        showMessage('不支持的导出格式');
+    }
+  });
+  
+  // 获取并添加文件夹选项
+  chrome.bookmarks.getTree(async (bookmarks) => {
+    const folders = getAllBookmarkFolders(bookmarks);
+    folders.sort((a, b) => a.title.localeCompare(b.title));
+    
+    folders.forEach(folder => {
+      if (!folder.title) return;
+      
+      const option = document.createElement('option');
+      option.value = folder.id;
+      option.textContent = folder.title;
+      modalFolderSelect.appendChild(option);
+    });
   });
 }

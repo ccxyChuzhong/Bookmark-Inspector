@@ -17,13 +17,15 @@
       <section class="action-panel">
         <div class="action-buttons">
           <div class="button-row">
-            <button id="exportBtn" class="btn primary-btn">
-              <i class="bi bi-download"></i> 导出书签
-            </button>
+            <div class="export-group">
+              <button id="exportBtn" class="btn primary-btn">
+                <i class="bi bi-download"></i> 导出书签
+              </button>
+            </div>
             <label for="importFile" class="btn primary-btn">
               <i class="bi bi-upload"></i> 选择文件导入
             </label>
-            <input type="file" id="importFile" accept=".json" style="display:none;">
+            <input type="file" id="importFile" accept=".json,.html" style="display:none;">
           </div>
           <div class="button-row">
             <button id="checkUrlsBtn" class="btn secondary-btn">
