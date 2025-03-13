@@ -12,20 +12,17 @@ body {
   width: 400px;
   max-width: 100%;
   background-color: #fff;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
   overflow: hidden;
 }
 
 .header {
-  background-color: #0078d7;
+  background: linear-gradient(135deg, #0078d7, #005a9e);
   color: white;
-  padding: 12px 15px;
+  padding: 15px;
   text-align: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 
 h1 {
@@ -54,15 +51,20 @@ h1 i {
 .action-buttons {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  justify-content: center;
-  margin-bottom: 10px;
+  gap: 5px;
+  width: 100%;
 }
 
 .button-row {
   display: flex;
-  justify-content: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 5px;
+  width: 100%;
+}
+
+.button-row .btn,
+.button-row label.btn {
+  flex: 1;
 }
 
 .folder-selection {
@@ -71,25 +73,22 @@ h1 i {
 }
 
 .folder-select {
-  width: 80%;
-  padding: 8px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  background-color: #fff;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  background-color: #f8f9fa;
   font-size: 14px;
   color: #333;
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.folder-select:hover {
-  border-color: #0078d7;
+  width: 100%;
+  margin-top: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
 }
 
 .folder-select:focus {
   border-color: #0078d7;
   box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.2);
+  outline: none;
 }
 
 label[for="importFile"].btn {
@@ -99,17 +98,18 @@ label[for="importFile"].btn {
 
 .btn {
   border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: 10px 15px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 100px;
   box-sizing: border-box;
   text-align: center;
+  font-weight: 500;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .btn i {
@@ -128,7 +128,7 @@ label[for="importFile"].btn {
 }
 
 .secondary-btn {
-  background-color: #5c6bc0;
+  background-color: #6c5ce7;
   color: white;
 }
 
@@ -193,49 +193,34 @@ label[for="importFile"].btn {
 }
 
 .progress-container {
-  margin-bottom: 15px;
-  position: relative;
+  margin: 15px 0;
+  width: 100%;
 }
 
 .progress-wrapper {
-  height: 20px;
-  background-color: #e0e0e0;
+  background-color: #f0f0f0;
   border-radius: 10px;
+  height: 12px;
   overflow: hidden;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  position: relative;
 }
 
 .progress-bar {
+  background: linear-gradient(90deg, #4CAF50, #8BC34A);
   height: 100%;
-  background-color: #0078d7;
-  background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent);
-  background-size: 20px 20px;
   border-radius: 10px;
+  transition: width 0.3s ease;
   width: 0%;
-  /* 使用transform代替width过渡，减少重排 */
-  transform: translateX(0);
-  /* 使用更长的过渡时间和更平滑的缓动函数 */
-  transition: transform 0.5s cubic-bezier(0.1, 0.7, 0.1, 1), width 0.5s cubic-bezier(0.1, 0.7, 0.1, 1);
-  /* 添加GPU加速 */
-  will-change: transform;
-  /* 防止子元素溢出 */
-  overflow: hidden;
-  /* 确保进度条始终在最上层 */
-  position: relative;
-  z-index: 1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .progress-text {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
   text-align: center;
-  line-height: 20px;
-  color: white;
-  font-size: 12px;
-  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
-  z-index: 2;
+  margin-top: 5px;
+  font-size: 14px;
+  color: #555;
+  font-weight: 500;
 }
 
 .disabled-btn {
@@ -252,10 +237,9 @@ label[for="importFile"].btn {
   height: 250px;
   overflow-y: auto;
   margin-top: 10px;
+  border-radius: 8px;
   border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  min-height: 250px;
-  background-color: #fafafa;
+  background-color: #f8f9fa;
   /* 强化硬件加速，减少闪烁 */
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -558,4 +542,92 @@ label[for="importFile"].btn {
 .header h1 {
   flex-grow: 1;
   text-align: center;
+}
+
+/* 模态框样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-container {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 400px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #666;
+}
+
+.modal-content {
+  padding: 15px;
+}
+
+.modal-section {
+  margin-bottom: 15px;
+}
+
+.modal-section label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.modal-select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.full-width {
+  width: 100% !important;
+  margin-bottom: 10px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+}
+
+.notification-area {
+  display: none;
 }

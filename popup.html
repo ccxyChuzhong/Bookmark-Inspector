@@ -17,24 +17,18 @@
       <section class="action-panel">
         <div class="action-buttons">
           <div class="button-row">
-            <div class="export-group">
-              <button id="exportBtn" class="btn primary-btn">
-                <i class="bi bi-download"></i> 导出书签
-              </button>
-            </div>
-            <label for="importFile" class="btn primary-btn">
+            <button id="exportBtn" class="btn primary-btn full-width">
+              <i class="bi bi-download"></i> 导出书签
+            </button>
+            <button id="importBtn" class="btn primary-btn full-width">
               <i class="bi bi-upload"></i> 选择文件导入
-            </label>
+            </button>
             <input type="file" id="importFile" accept=".json,.html" style="display:none;">
           </div>
-          <div class="button-row">
-            <button id="checkUrlsBtn" class="btn secondary-btn">
-              <i class="bi bi-check-circle"></i> 检测网址可用性
-            </button>
-          </div>
-        </div>
-        <div class="folder-selection">
-          <select id="folderSelect" class="folder-select">
+          <button id="checkUrlsBtn" class="btn secondary-btn full-width">
+            <i class="bi bi-check-circle"></i> 检测网址可用性
+          </button>
+          <select id="folderSelect" class="folder-select full-width">
             <option value="all">全部文件夹</option>
             <!-- 文件夹选项将通过JavaScript动态添加 -->
           </select>
