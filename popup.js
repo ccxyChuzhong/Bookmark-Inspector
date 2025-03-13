@@ -13,14 +13,33 @@ function importBookmarks(event) {
   if (!file) return;
 
   const reader = new FileReader();
-  reader.onload = function (e) {
+  reader.onload = async function(e) {
+    const content = e.target.result;
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    
     try {
-      const bookmarks = JSON.parse(e.target.result);
-      processImport(bookmarks);
+      switch (fileExtension) {
+        case 'json':
+          const bookmarks = JSON.parse(content);
+          await processImport(bookmarks);
+          break;
+        case 'html':
+          await importBookmarksFromHTML(content);
+          break;
+        case 'csv':
+          await importBookmarksFromCSV(content);
+          break;
+        case 'md':
+          await importBookmarksFromMarkdown(content);
+          break;
+        default:
+          showMessage("不支持的文件格式", true);
+      }
     } catch (error) {
-      showMessage("导入失败: 文件格式不正确");
+      showMessage(`导入失败: ${error.message}`, true);
     }
   };
+  
   reader.readAsText(file);
 }
 
@@ -2222,3 +2241,140 @@ function showExportModal() {
 document.getElementById('importBtn').addEventListener('click', function() {
   document.getElementById('importFile').click();
 });
+
+// 导入 HTML 格式书签
+async function importBookmarksFromHTML(content) {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(content, 'text/html');
+    const bookmarks = [];
+    
+    // 递归处理 HTML 书签结构
+    function processHTMLNode(node, parentId = "1") {
+      const items = [];
+      const dl = node.querySelector('dl');
+      if (!dl) return items;
+      
+      const children = dl.children;
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+        if (child.tagName === 'DT') {
+          const h3 = child.querySelector('h3');
+          const a = child.querySelector('a');
+          
+          if (h3) {
+            // 这是一个文件夹
+            const folder = {
+              title: h3.textContent,
+              children: processHTMLNode(child, parentId)
+            };
+            items.push(folder);
+          } else if (a) {
+            // 这是一个书签
+            items.push({
+              title: a.textContent,
+              url: a.href
+            });
+          }
+        }
+      }
+      return items;
+    }
+    
+    const items = processHTMLNode(doc.body);
+    await createBookmarksRecursively(items);
+    showMessage("HTML 书签导入成功！");
+  } catch (error) {
+    showMessage("导入 HTML 失败: " + error.message, true);
+  }
+}
+
+// 导入 CSV 格式书签
+async function importBookmarksFromCSV(content) {
+  try {
+    // 解析 CSV 内容
+    const lines = content.split(/\r?\n/);
+    const headers = lines[0].split(',');
+    const bookmarks = [];
+    const folderMap = new Map(); // 用于存储文件夹结构
+    
+    // 跳过标题行，处理每一行
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      
+      // 处理 CSV 行，考虑引号内的逗号
+      const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g)
+        .map(cell => cell.replace(/^"|"$/g, '').replace(/""/g, '"'));
+      
+      const title = row[0];
+      const url = row[1];
+      const folderPath = row[2];
+      
+      if (!url || !title) continue;
+      
+      // 创建文件夹路径
+      const folders = folderPath.split('/').filter(f => f);
+      let currentPath = '';
+      let parentId = '1';
+      
+      // 确保文件夹路径存在
+      for (const folder of folders) {
+        currentPath = currentPath ? `${currentPath}/${folder}` : folder;
+        if (!folderMap.has(currentPath)) {
+          const newFolder = await createBookmarkFolder(parentId, folder);
+          folderMap.set(currentPath, newFolder.id);
+        }
+        parentId = folderMap.get(currentPath);
+      }
+      
+      // 创建书签
+      await createBookmark(parentId, title, url);
+    }
+    
+    showMessage("CSV 书签导入成功！");
+  } catch (error) {
+    showMessage("导入 CSV 失败: " + error.message, true);
+  }
+}
+
+// 导入 Markdown 格式书签
+async function importBookmarksFromMarkdown(content) {
+  try {
+    const lines = content.split('\n');
+    let currentFolder = { id: "1" };
+    const folderStack = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      // 处理标题（文件夹）
+      if (line.startsWith('#')) {
+        const level = line.match(/^#+/)[0].length;
+        const title = line.replace(/^#+\s*/, '');
+        
+        // 根据标题级别调整文件夹栈
+        while (folderStack.length >= level) {
+          folderStack.pop();
+        }
+        
+        const parentId = folderStack.length > 0 ? folderStack[folderStack.length - 1].id : "1";
+        const newFolder = await createBookmarkFolder(parentId, title);
+        folderStack.push(newFolder);
+        currentFolder = newFolder;
+      }
+      // 处理书签链接
+      else if (line.startsWith('-')) {
+        const match = line.match(/\[(.*?)\]\((.*?)\)/);
+        if (match) {
+          const [, title, url] = match;
+          await createBookmark(currentFolder.id, title, url);
+        }
+      }
+    }
+    
+    showMessage("Markdown 书签导入成功！");
+  } catch (error) {
+    showMessage("导入 Markdown 失败: " + error.message, true);
+  }
+}
