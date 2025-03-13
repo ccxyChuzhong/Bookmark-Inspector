@@ -6,6 +6,11 @@
 
 一款专注于书签健康管理的浏览器扩展，提供智能检测、批量操作与跨设备同步能力。
 ![微信截图_20250313112137](https://github.com/user-attachments/assets/03b44429-e2ec-4000-b355-08adaf6616cc)
+![微信图片_20250313112226](https://github.com/user-attachments/assets/0ff8023e-0738-4bbb-96a0-6f878cc37d5c)
+![微信截图_20250313112215](https://github.com/user-attachments/assets/fa0d4c64-95e5-4d44-a59a-ddcabaf2f2e2)
+
+
+
 
 ## ✨ 核心功能
 
