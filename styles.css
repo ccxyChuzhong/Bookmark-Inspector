@@ -1,0 +1,561 @@
+body {
+  font-family: 'Microsoft YaHei', sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f5f5f5;
+  color: #333;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.container {
+  width: 400px;
+  max-width: 100%;
+  background-color: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.header {
+  background-color: #0078d7;
+  color: white;
+  padding: 12px 15px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+h1 {
+  font-size: 18px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-grow: 1;
+  text-align: center;
+}
+
+h1 i {
+  margin-right: 8px;
+  font-size: 20px;
+}
+
+.main-content {
+  padding: 15px;
+}
+
+.action-panel {
+  margin-bottom: 15px;
+}
+
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.button-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.folder-selection {
+  margin-top: 2px;
+  text-align: center;
+}
+
+.folder-select {
+  width: 80%;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.folder-select:hover {
+  border-color: #0078d7;
+}
+
+.folder-select:focus {
+  border-color: #0078d7;
+  box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.2);
+}
+
+label[for="importFile"].btn {
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.btn {
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 100px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.btn i {
+  margin-right: 6px;
+}
+
+.primary-btn {
+  background-color: #0078d7;
+  color: white;
+}
+
+.primary-btn:hover {
+  background-color: #005a9e;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.secondary-btn {
+  background-color: #5c6bc0;
+  color: white;
+}
+
+.secondary-btn:hover {
+  background-color: #3f51b5;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.import-container {
+  position: relative;
+  width: 100%;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.notification-area {
+  margin: 10px 0;
+}
+
+.message {
+  padding: 10px;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  transform: translateY(-5px);
+  margin: 0 auto;
+}
+
+.message.success {
+  background-color: #e6f7e6;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.message.error {
+  background-color: #fdecea;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 网址可用性检测相关样式 */
+.check-results {
+  margin-top: 15px;
+  /* 添加固定高度，防止容器大小变化 */
+  min-height: 300px;
+  height: 300px;
+  /* 防止内容溢出导致的布局变化 */
+  overflow: hidden;
+  /* 使用硬件加速 */
+  transform: translate3d(0,0,0);
+  /* 预先分配空间，防止布局偏移 */
+  contain: layout size;
+  /* 确保子元素不会影响父元素尺寸 */
+  isolation: isolate;
+}
+
+.progress-container {
+  margin-bottom: 15px;
+  position: relative;
+}
+
+.progress-wrapper {
+  height: 20px;
+  background-color: #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.progress-bar {
+  height: 100%;
+  background-color: #0078d7;
+  background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent);
+  background-size: 20px 20px;
+  border-radius: 10px;
+  width: 0%;
+  /* 使用transform代替width过渡，减少重排 */
+  transform: translateX(0);
+  /* 使用更长的过渡时间和更平滑的缓动函数 */
+  transition: transform 0.5s cubic-bezier(0.1, 0.7, 0.1, 1), width 0.5s cubic-bezier(0.1, 0.7, 0.1, 1);
+  /* 添加GPU加速 */
+  will-change: transform;
+  /* 防止子元素溢出 */
+  overflow: hidden;
+  /* 确保进度条始终在最上层 */
+  position: relative;
+  z-index: 1;
+}
+
+.progress-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  text-align: center;
+  line-height: 20px;
+  color: white;
+  font-size: 12px;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+}
+
+.disabled-btn {
+  background-color: #cccccc !important;
+  color: #666666 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.results-container {
+  height: 250px;
+  overflow-y: auto;
+  margin-top: 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  min-height: 250px;
+  background-color: #fafafa;
+  /* 强化硬件加速，减少闪烁 */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 减少will-change属性的使用，仅在真正需要时使用 */
+  /* 优化滚动性能 */
+  scroll-behavior: auto; /* 改为auto，避免平滑滚动引起的性能问题 */
+  overscroll-behavior: contain;
+  /* 优化渲染性能 */
+  contain: content;
+  /* 移除不必要的过渡效果 */
+  box-shadow: none;
+  /* 移除不必要的transition */
+  /* 添加GPU加速 */
+  -webkit-transform: translate3d(0,0,0);
+  /* 防止闪烁 */
+  -webkit-backface-visibility: hidden;
+  perspective: 1000;
+}
+
+.url-item {
+  padding: 10px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  /* 移除可能导致闪烁的过渡效果 */
+  transition: none;
+  /* 移除will-change，减少内存占用和渲染负担 */
+  backface-visibility: hidden;
+  /* 保留硬件加速，但使用更高效的方式 */
+  transform: translate3d(0,0,0);
+  /* 防止子元素溢出 */
+  overflow: hidden;
+  /* 固定高度，防止高度变化引起的重排 */
+  height: 40px;
+  box-sizing: border-box;
+  /* 预先分配空间，防止布局偏移 */
+  contain: layout;
+}
+
+.url-item:hover {
+  background-color: #f9f9f9;
+}
+
+.url-item:last-child {
+  border-bottom: none;
+}
+
+.url-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 10px;
+  /* 防止文本溢出导致布局变化 */
+  max-width: 280px;
+}
+
+.url-status {
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+  text-align: center;
+  /* 固定宽度和高度，防止状态变化导致尺寸变化 */
+  min-width: 60px;
+  width: 60px;
+  height: 22px;
+  line-height: 16px;
+  /* 使用flex布局确保内容居中 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 防止文本溢出 */
+  overflow: hidden;
+  white-space: nowrap;
+  /* 移除可能的过渡效果 */
+  transition: none;
+  /* 确保元素不会因为内容变化而改变大小 */
+  box-sizing: border-box;
+}
+
+.url-status.available {
+  background-color: #e6f7e6;
+  color: #2e7d32;
+}
+
+.url-status.unavailable {
+  background-color: #fdecea;
+  color: #c62828;
+}
+
+.url-status.checking {
+  background-color: #e3f2fd;
+  color: #0078d7;
+}
+
+.footer {
+  padding: 10px;
+  text-align: center;
+  border-top: 1px solid #e0e0e0;
+  color: #757575;
+  background-color: #f5f5f5;
+}
+
+.footer-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 失效书签管理样式 */
+.invalid-bookmarks {
+  margin-top: 20px;
+  border-top: 1px solid #e0e0e0;
+  padding-top: 15px;
+}
+
+.section-title {
+  font-size: 16px;
+  margin: 0 0 10px 0;
+  color: #333;
+  display: flex;
+  align-items: center;
+}
+
+.invalid-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.small-btn {
+  min-width: auto;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.danger-btn {
+  background-color: #e53935;
+  color: white;
+}
+
+.danger-btn:hover {
+  background-color: #c62828;
+}
+
+.invalid-list {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #fafafa;
+}
+
+.invalid-item {
+  padding: 10px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.invalid-item:last-child {
+  border-bottom: none;
+}
+
+.invalid-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 10px;
+}
+
+.invalid-actions-item {
+  display: flex;
+  gap: 5px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.icon-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.icon-btn.check {
+  color: #0078d7;
+}
+
+.icon-btn.delete {
+  color: #e53935;
+}
+
+.url-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.url-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 3px;
+}
+
+.action-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.go-btn {
+  color: #0066cc;
+}
+
+.delete-btn {
+  color: #cc0000;
+}
+
+/* 响应式调整 */
+@media (max-width: 400px) {
+  .container {
+    width: 100%;
+    border-radius: 0;
+    min-width: 400px;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+  }
+  
+  .btn {
+    width: 100%;
+  }
+  
+  .folder-select {
+    width: 100%;
+  }
+}
+
+/* 浏览器插件环境适配 */
+@media (max-width: 300px) {
+  .container {
+    width: 100%;
+    min-width: 400px;
+  }
+  
+  .main-content {
+    padding: 10px;
+  }
+  
+  .btn {
+    min-width: 80px;
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+  
+  h1 {
+    font-size: 16px;
+  }
+}
+
+#keepOpenBtn, #closeBtn {
+  background-color: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+#keepOpenBtn:hover, #closeBtn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+/* 确保标题居中 */
+.header h1 {
+  flex-grow: 1;
+  text-align: center;
+}

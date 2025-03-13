@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>书签管理器</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1><i class="bi bi-bookmark-star"></i> 书签管理器</h1>
+    </header>
+    
+    <main class="main-content">
+      <section class="action-panel">
+        <div class="action-buttons">
+          <div class="button-row">
+            <button id="exportBtn" class="btn primary-btn">
+              <i class="bi bi-download"></i> 导出书签
+            </button>
+            <label for="importFile" class="btn primary-btn">
+              <i class="bi bi-upload"></i> 选择文件导入
+            </label>
+            <input type="file" id="importFile" accept=".json" style="display:none;">
+          </div>
+          <div class="button-row">
+            <button id="checkUrlsBtn" class="btn secondary-btn">
+              <i class="bi bi-check-circle"></i> 检测网址可用性
+            </button>
+          </div>
+        </div>
+        <div class="folder-selection">
+          <select id="folderSelect" class="folder-select">
+            <option value="all">全部文件夹</option>
+            <!-- 文件夹选项将通过JavaScript动态添加 -->
+          </select>
+        </div>
+      </section>
+      
+      <section class="notification-area">
+        <div id="message" class="message"></div>
+      </section>
+      
+      <section id="checkResults" class="check-results">
+        <div id="progressContainer" class="progress-container" style="display:none;">
+          <div class="progress-wrapper">
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
+          <div id="progressText" class="progress-text">0%</div>
+        </div>
+        <div id="resultsContainer" class="results-container"></div>
+      </section>
+  
+    </main>
+    
+    <footer class="footer">
+      <div class="footer-content">
+        <small>书签管理器 v1.0</small>
+      </div>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
