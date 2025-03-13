@@ -545,31 +545,37 @@ function filterBookmarksByFolder(bookmarks, folderId) {
 // 显示消息函数
 function showMessage(text, isError = false) {
   const messageElement = document.getElementById("message");
-  if (messageElement) {
-    messageElement.textContent = text;
-    messageElement.className = "message" + (isError ? " error" : " success");
-
-    // 3秒后自动清除消息
-    setTimeout(() => {
+  if (!messageElement) return; 
+  
+  const notificationArea = document.querySelector(".notification-area");
+  if (notificationArea) {
+    notificationArea.style.display = "block";
+  }
+  messageElement.textContent = text;
+  messageElement.className = "message" + (isError ? " error" : " success");
+  setTimeout(() => {
+    if (document.body.contains(messageElement)) {
       messageElement.textContent = "";
       messageElement.className = "message";
-    }, 3000);
-  }
+      if (notificationArea) {
+        notificationArea.style.display = "none";
+      }
+    }
+  }, 3000);
 }
-
 // 检测URL是否可访问
 async function checkUrlAvailability(url) {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
-
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const response = await fetch(url, {
       method: "HEAD",
       mode: "no-cors",
       signal: controller.signal,
+      cache: "no-store" 
     });
 
-    clearTimeout(timeoutId);
+    clearTimeout(timeoutId); 
     return true;
   } catch (error) {
     return false;
@@ -674,6 +680,11 @@ async function initFolderSelect() {
 
 // 页面加载完成后添加事件监听器
 document.addEventListener("DOMContentLoaded", async () => {
+
+  const notificationArea = document.querySelector(".notification-area");
+  if (notificationArea) {
+    notificationArea.style.display = "none";
+  }
   // 导出按钮点击事件处理
   const exportBtn = document.getElementById('exportBtn');
   if (exportBtn) {
@@ -727,7 +738,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error("恢复检测结果时出错:", error);
   }
 
-  // 其他初始化代码...
 
   // 导入文件选择事件监听
   const importFile = document.getElementById("importFile");
@@ -790,7 +800,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       keepOpenBtn.className = "btn small-btn";
       keepOpenBtn.innerHTML = '<i class="bi bi-pin-angle"></i> 保持打开';
       keepOpenBtn.title = "在独立窗口中打开";
-
+      keepOpenBtn.style.marginLeft = "auto";
+      keepOpenBtn.style.width = "100px";
       // 将按钮添加到header
       header.appendChild(keepOpenBtn);
 
@@ -1896,57 +1907,40 @@ function populateInvalidList() {
 
 function updateResultsUI() {
   try {
-    // 更新结果容器
     const resultsContainer = document.getElementById('resultsContainer');
     if (!resultsContainer) return;
-    
-    // 如果结果为空，显示提示信息
-    if (checkingStatus.results.length === 0) {
+    if (!checkingStatus.results || checkingStatus.results.length === 0) {
       resultsContainer.innerHTML = '<div class="text-center p-3">没有找到书签</div>';
       return;
     }
-    
-    // 先创建文档片段，只有成功创建后才清空容器
     const fragment = document.createDocumentFragment();
-    const currentItems = Array.from(resultsContainer.children);
     const urlToElement = new Map();
-    
-    // 预处理现有元素
-    currentItems.forEach(item => {
+    Array.from(resultsContainer.children).forEach(item => {
       const url = item.getAttribute('data-url');
       if (url) urlToElement.set(url, item);
     });
     
-    // 更新或创建项
     checkingStatus.results.forEach((result, index) => {
       let urlItem;
       if (urlToElement.has(result.url)) {
         urlItem = urlToElement.get(result.url);
         urlToElement.delete(result.url);
         
-        // 更新现有项
         urlItem.setAttribute('data-index', index);
         const titleElement = urlItem.querySelector('.url-title');
         if (titleElement) titleElement.textContent = result.title || '无标题';
         const statusElement = urlItem.querySelector('.url-status');
         if (statusElement) updateUrlItemStatus(statusElement, result.status);
       } else {
-        // 创建新项
         urlItem = createUrlItem(result, index);
       }
       fragment.appendChild(urlItem);
     });
     
-    // 只有成功构建片段后才清空容器
-    if (fragment.childNodes.length > 0) {
-      resultsContainer.innerHTML = '';
-      resultsContainer.appendChild(fragment);
-    }
-    
-    // 更新其他UI元素...
+    resultsContainer.innerHTML = '';
+    resultsContainer.appendChild(fragment);
   } catch (error) {
     console.error('更新结果UI时出错:', error);
-    showMessage('更新UI失败: ' + error.message, true);
   }
 }
 
@@ -2132,3 +2126,8 @@ function showExportModal() {
     });
   });
 }
+
+// 在您的popup.js文件中添加
+document.getElementById('importBtn').addEventListener('click', function() {
+  document.getElementById('importFile').click();
+});

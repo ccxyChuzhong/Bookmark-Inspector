@@ -180,8 +180,8 @@ label[for="importFile"].btn {
 .check-results {
   margin-top: 15px;
   /* 添加固定高度，防止容器大小变化 */
-  min-height: 300px;
-  height: 300px;
+  min-height: 270px;
+  height: 270px;
   /* 防止内容溢出导致的布局变化 */
   overflow: hidden;
   /* 使用硬件加速 */
