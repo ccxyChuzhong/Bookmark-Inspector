@@ -380,19 +380,50 @@ async function exportBookmarksAsHTML(selectedFolder = 'all') {
 
     function processNode(node, level = 0) {
       const indent = '    '.repeat(level);
-      if (selectedFolder !== 'all' && !isNodeInFolder(node, selectedFolder)) {
-        return;
-      }
-      if (node.children) {
-        htmlContent += `${indent}<DT><H3>${node.title}</H3>\n`;
-        htmlContent += `${indent}<DL><p>\n`;
-        node.children.forEach(child => processNode(child, level + 1));
-        htmlContent += `${indent}</DL><p>\n`;
-      } else if (node.url) {
-        htmlContent += `${indent}<DT><A HREF="${node.url}">${node.title}</A>\n`;
+      
+      // 如果选择了特定文件夹，找到该文件夹并只处理其内容
+      if (selectedFolder !== 'all') {
+        if (node.id === selectedFolder) {
+          // 找到选中的文件夹，处理其内容
+          if (node.children) {
+            htmlContent += `${indent}<DT><H3>${node.title}</H3>\n`;
+            htmlContent += `${indent}<DL><p>\n`;
+            // 处理文件夹内的所有内容（包括书签和子文件夹）
+            node.children.forEach(child => {
+              if (child.url) {
+                // 处理书签
+                htmlContent += `${indent}    <DT><A HREF="${child.url}">${child.title}</A>\n`;
+              } else if (child.children) {
+                // 递归处理子文件夹
+                processNode(child, level + 1);
+              }
+            });
+            htmlContent += `${indent}</DL><p>\n`;
+          }
+          return true;
+        } else if (node.children) {
+          // 在子节点中继续查找选中的文件夹
+          for (const child of node.children) {
+            if (processNode(child, level)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      } else {
+        // 处理所有书签
+        if (node.children) {
+          htmlContent += `${indent}<DT><H3>${node.title}</H3>\n`;
+          htmlContent += `${indent}<DL><p>\n`;
+          node.children.forEach(child => processNode(child, level + 1));
+          htmlContent += `${indent}</DL><p>\n`;
+        } else if (node.url) {
+          htmlContent += `${indent}<DT><A HREF="${node.url}">${child.title}</A>\n`;
+        }
       }
     }
 
+    // 开始处理书签
     bookmarks[0].children.forEach(node => processNode(node));
     htmlContent += '</DL><p>';
 
@@ -413,19 +444,49 @@ async function exportBookmarksAsHTML(selectedFolder = 'all') {
   }
 }
 
-// 导出书签为CSV格式
-async function exportBookmarksAsCSV() {
+//CSV 导出函数
+async function exportBookmarksAsCSV(selectedFolder = 'all') {
   try {
     const bookmarks = await getAllBookmarks();
     let csvContent = '标题,网址,文件夹\n';
 
     function processNode(node, folderPath = '') {
-      if (node.url) {
-        const title = node.title.replace(/"/g, '""');
-        csvContent += `"${title}","${node.url}","${folderPath}"\n`;
-      } else if (node.children) {
-        const newPath = folderPath ? `${folderPath}/${node.title}` : node.title;
-        node.children.forEach(child => processNode(child, newPath));
+      // 如果选择了特定文件夹，找到该文件夹并只处理其内容
+      if (selectedFolder !== 'all') {
+        if (node.id === selectedFolder) {
+          // 找到选中的文件夹，处理其内容
+          if (node.children) {
+            const newPath = node.title;
+            node.children.forEach(child => {
+              if (child.url) {
+                // 处理书签
+                const title = child.title.replace(/"/g, '""');
+                csvContent += `"${title}","${child.url}","${newPath}"\n`;
+              } else if (child.children) {
+                // 递归处理子文件夹
+                processNode(child, `${newPath}/${child.title}`);
+              }
+            });
+          }
+          return true;
+        } else if (node.children) {
+          // 在子节点中继续查找选中的文件夹
+          for (const child of node.children) {
+            if (processNode(child, folderPath)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      } else {
+        // 处理所有书签
+        if (node.url) {
+          const title = node.title.replace(/"/g, '""');
+          csvContent += `"${title}","${node.url}","${folderPath}"\n`;
+        } else if (node.children) {
+          const newPath = folderPath ? `${folderPath}/${node.title}` : node.title;
+          node.children.forEach(child => processNode(child, newPath));
+        }
       }
     }
 
@@ -448,20 +509,50 @@ async function exportBookmarksAsCSV() {
   }
 }
 
-// 导出书签为Markdown格式
-async function exportBookmarksAsMarkdown() {
+// 修改 Markdown 导出函数
+async function exportBookmarksAsMarkdown(selectedFolder = 'all') {
   try {
     const bookmarks = await getAllBookmarks();
     let mdContent = '# 书签列表\n\n';
 
     function processNode(node, level = 1) {
-      if (node.url) {
-        mdContent += `${'  '.repeat(level - 1)}- [${node.title}](${node.url})\n`;
-      } else if (node.children) {
-        if (node.title) {
-          mdContent += `\n${'#'.repeat(level)} ${node.title}\n\n`;
+      // 如果选择了特定文件夹，找到该文件夹并只处理其内容
+      if (selectedFolder !== 'all') {
+        if (node.id === selectedFolder) {
+          // 找到选中的文件夹，处理其内容
+          if (node.children) {
+            mdContent += `## ${node.title}\n\n`;
+            node.children.forEach(child => {
+              if (child.url) {
+                // 处理书签
+                mdContent += `${'  '.repeat(level - 1)}- [${child.title}](${child.url})\n`;
+              } else if (child.children) {
+                // 递归处理子文件夹
+                mdContent += `\n### ${child.title}\n\n`;
+                processNode(child, level + 1);
+              }
+            });
+          }
+          return true;
+        } else if (node.children) {
+          // 在子节点中继续查找选中的文件夹
+          for (const child of node.children) {
+            if (processNode(child, level)) {
+              return true;
+            }
+          }
         }
-        node.children.forEach(child => processNode(child, level + 1));
+        return false;
+      } else {
+        // 处理所有书签
+        if (node.url) {
+          mdContent += `${'  '.repeat(level - 1)}- [${node.title}](${node.url})\n`;
+        } else if (node.children) {
+          if (node.title) {
+            mdContent += `\n${'#'.repeat(level)} ${node.title}\n\n`;
+          }
+          node.children.forEach(child => processNode(child, level + 1));
+        }
       }
     }
 
