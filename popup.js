@@ -99,22 +99,23 @@ async function deleteBookmark(bookmarkId) {
       return;
     }
     
+
     // 删除书签
     await chrome.bookmarks.remove(bookmarkId);
-    
+
     // 从当前显示的书签列表中移除该书签
     // 注意：不要清空整个列表，只移除被删除的项
     const index = currentBookmarks.findIndex(b => b.id === bookmarkId);
     if (index !== -1) {
       currentBookmarks.splice(index, 1);
     }
-    
+
     // 更新界面显示
     renderBookmarks(currentBookmarks);
-    
+
     // 更新计数器
     updateCounters();
-    
+
     // 显示成功消息
     showMessage("书签已成功删除");
   } catch (error) {
@@ -126,10 +127,10 @@ async function deleteBookmark(bookmarkId) {
 function renderBookmarks(bookmarks) {
   const bookmarksList = document.getElementById("bookmarksList");
   if (!bookmarksList) return;
-  
+
   // 清空现有列表
   bookmarksList.innerHTML = "";
-  
+
   // 如果没有书签，显示提示信息
   if (bookmarks.length === 0) {
     const emptyMessage = document.createElement("div");
@@ -138,7 +139,7 @@ function renderBookmarks(bookmarks) {
     bookmarksList.appendChild(emptyMessage);
     return;
   }
-  
+
   // 渲染每个书签
   bookmarks.forEach((bookmark) => {
     const bookmarkItem = document.createElement("div");
@@ -146,29 +147,29 @@ function renderBookmarks(bookmarks) {
     if (bookmark.invalid) {
       bookmarkItem.classList.add("invalid");
     }
-    
+
     // 创建书签图标
     const favicon = document.createElement("img");
     favicon.className = "favicon";
     favicon.src = bookmark.favicon || "images/default-favicon.png";
-    favicon.onerror = function() {
+    favicon.onerror = function () {
       this.src = "images/default-favicon.png";
     };
-    
+
     // 创建书签内容区域
     const bookmarkContent = document.createElement("div");
     bookmarkContent.className = "bookmark-content";
-    
+
     // 创建书签标题
     const title = document.createElement("div");
     title.className = "bookmark-title";
     title.textContent = bookmark.title || "无标题";
-    
+
     // 创建书签URL
     const url = document.createElement("div");
     url.className = "bookmark-url";
     url.textContent = bookmark.url;
-    
+
     // 创建书签状态标签
     const statusBadge = document.createElement("span");
     statusBadge.className = "badge";
@@ -179,11 +180,11 @@ function renderBookmarks(bookmarks) {
       statusBadge.classList.add("badge-success");
       statusBadge.textContent = "有效";
     }
-    
+
     // 创建书签操作区域
     const actions = document.createElement("div");
     actions.className = "bookmark-actions";
-    
+
     // 创建打开按钮
     const openBtn = document.createElement("button");
     openBtn.className = "btn btn-sm btn-outline-primary open-btn";
@@ -194,7 +195,7 @@ function renderBookmarks(bookmarks) {
       e.stopPropagation();
       chrome.tabs.create({ url: bookmark.url });
     });
-    
+
     // 创建编辑按钮
     const editBtn = document.createElement("button");
     editBtn.className = "btn btn-sm btn-outline-secondary edit-btn";
@@ -205,7 +206,7 @@ function renderBookmarks(bookmarks) {
       e.stopPropagation();
       showEditBookmarkModal(bookmark);
     });
-    
+
     // 创建删除按钮
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "btn btn-sm btn-outline-danger delete-btn";
@@ -216,7 +217,7 @@ function renderBookmarks(bookmarks) {
       e.stopPropagation();
       deleteBookmark(bookmark.id);
     });
-    
+
     // 创建重新检查按钮（仅对失效书签显示）
     if (bookmark.invalid) {
       const recheckBtn = document.createElement("button");
@@ -230,31 +231,31 @@ function renderBookmarks(bookmarks) {
       });
       actions.appendChild(recheckBtn);
     }
-    
+
     // 将按钮添加到操作区域
     actions.appendChild(openBtn);
     actions.appendChild(editBtn);
     actions.appendChild(deleteBtn);
-    
+
     // 将内容添加到书签内容区域
     bookmarkContent.appendChild(title);
     bookmarkContent.appendChild(url);
     bookmarkContent.appendChild(statusBadge);
-    
+
     // 将所有元素添加到书签项
     bookmarkItem.appendChild(favicon);
     bookmarkItem.appendChild(bookmarkContent);
     bookmarkItem.appendChild(actions);
-    
+
     // 为整个书签项添加点击事件（打开书签）
     bookmarkItem.addEventListener("click", () => {
       chrome.tabs.create({ url: bookmark.url });
     });
-    
+
     // 将书签项添加到列表
     bookmarksList.appendChild(bookmarkItem);
   });
-  
+
   // 更新计数器
   updateCounters();
 }
@@ -268,24 +269,24 @@ async function recheckBookmark(bookmarkId) {
       showMessage("找不到该书签", true);
       return;
     }
-    
+
     const bookmark = bookmarks[0];
-    
+
     // 显示检测中的消息
     showMessage("正在重新检查书签...");
-    
+
     // 检查URL可用性
     const isAvailable = await checkUrlAvailability(bookmark.url);
-    
+
     // 更新结果数组中的状态
     const index = checkingStatus.results.findIndex(r => r.url === bookmark.url);
     if (index !== -1) {
       checkingStatus.results[index].status = isAvailable;
-      
+
       // 保存更新后的结果
       saveCheckResults();
     }
-    
+
     // 如果书签恢复可用，从失效列表中移除
     if (isAvailable) {
       const itemToRemove = document.querySelector(
@@ -294,16 +295,16 @@ async function recheckBookmark(bookmarkId) {
       if (itemToRemove) {
         itemToRemove.remove();
       }
-      
+
       // 检查是否还有其他失效书签
       const remainingInvalidItems = document.querySelectorAll("#invalidList .invalid-bookmark-item");
       if (remainingInvalidItems.length === 0) {
         document.getElementById("invalidBookmarks").style.display = "none";
       }
-      
+
       // 更新主结果列表中对应的项
       updateResultsUI();
-      
+
       showMessage("书签已恢复可用");
     } else {
       showMessage("书签仍然不可用", true);
@@ -318,11 +319,11 @@ async function recheckBookmark(bookmarkId) {
 function updateCounters() {
   const totalCount = currentBookmarks.length;
   const invalidCount = currentBookmarks.filter(b => b.invalid).length;
-  
+
   // 更新显示
   const totalCountElement = document.getElementById("totalCount");
   const invalidCountElement = document.getElementById("invalidCount");
-  
+
   if (totalCountElement) totalCountElement.textContent = totalCount;
   if (invalidCountElement) invalidCountElement.textContent = invalidCount;
 }
@@ -331,7 +332,7 @@ function updateCounters() {
 function updateInvalidBookmarksUI() {
   const hasInvalidBookmarks = checkingStatus.results.some(result => !result.status);
   const invalidBookmarks = document.getElementById('invalidBookmarks');
-  
+
   if (invalidBookmarks) {
     invalidBookmarks.style.display = hasInvalidBookmarks ? 'block' : 'none';
     if (hasInvalidBookmarks) {
@@ -598,17 +599,17 @@ async function exportBookmarksAsMarkdown(selectedFolder = 'all') {
 async function exportBookmarksAsJSON(selectedFolder = 'all') {
   try {
     const bookmarks = await getAllBookmarks();
-    
+
     // 如果选择了特定文件夹，筛选书签
     let bookmarksToExport = bookmarks;
     if (selectedFolder !== 'all') {
       // 为节点添加路径信息
       addPathToNodes(bookmarks);
-      
+
       // 筛选出选定文件夹下的书签
       bookmarksToExport = filterBookmarksByFolder(bookmarks, selectedFolder);
     }
-    
+
     const bookmarksJson = JSON.stringify(bookmarksToExport, null, 2);
 
     const blob = new Blob([bookmarksJson], { type: 'application/json' });
@@ -643,11 +644,11 @@ function filterBookmarksByFolder(bookmarks, folderId) {
     }
     return null;
   }
-  
+
   // 查找指定文件夹
   const folder = findFolder(bookmarks, folderId);
   if (!folder) return bookmarks; // 如果找不到文件夹，返回所有书签
-  
+
   // 创建一个新的书签树，只包含选定的文件夹
   return [folder];
 }
@@ -655,8 +656,8 @@ function filterBookmarksByFolder(bookmarks, folderId) {
 // 显示消息函数
 function showMessage(text, isError = false) {
   const messageElement = document.getElementById("message");
-  if (!messageElement) return; 
-  
+  if (!messageElement) return;
+
   const notificationArea = document.querySelector(".notification-area");
   if (notificationArea) {
     notificationArea.style.display = "block";
@@ -682,10 +683,10 @@ async function checkUrlAvailability(url) {
       method: "HEAD",
       mode: "no-cors",
       signal: controller.signal,
-      cache: "no-store" 
+      cache: "no-store"
     });
 
-    clearTimeout(timeoutId); 
+    clearTimeout(timeoutId);
     return true;
   } catch (error) {
     return false;
@@ -756,7 +757,7 @@ async function initFolderSelect() {
 
     // 完全清空下拉菜单
     folderSelect.innerHTML = '';
-    
+
     // 重新添加"全部文件夹"选项
     const allFoldersOption = document.createElement("option");
     allFoldersOption.value = "all";
@@ -776,7 +777,7 @@ async function initFolderSelect() {
     folders.forEach((folder) => {
       // 跳过没有标题的文件夹
       if (!folder.title) return;
-      
+
       const option = document.createElement("option");
       option.value = folder.id;
       option.textContent = folder.title;
@@ -1602,40 +1603,40 @@ function createUrlItem(result, index) {
     deleteButton.title = "删除书签";
     deleteButton.addEventListener("click", async (e) => {
       e.stopPropagation();
-      
+
       // 确认删除
       if (confirm(`确定要删除书签 "${result.title}" 吗？`)) {
         try {
           console.log("删除前结果数量:", checkingStatus.results.length);
-          
+
           // 先保存结果数组的副本
           const currentResults = [...checkingStatus.results];
-          
+
           // 获取书签ID
           const bookmarkId = await findBookmarkIdByUrl(result.url);
           if (bookmarkId) {
             // 删除书签
             await chrome.bookmarks.remove(bookmarkId);
-            
+
             // 从副本中移除该项
             const index = currentResults.findIndex(r => r.url === result.url);
             if (index !== -1) {
               currentResults.splice(index, 1);
             }
-            
+
             // 重新设置结果数组
             checkingStatus.results = currentResults;
-            
+
             console.log("删除后结果数量:", checkingStatus.results.length);
-            
+
             // 从DOM中直接移除该项
             if (urlItem && urlItem.parentNode) {
               urlItem.parentNode.removeChild(urlItem);
             }
-            
+
             // 更新计数器
             updateCounters();
-            
+
             // 使用延迟保存，确保保存的是修改后的状态
             setTimeout(() => {
               // 使用深拷贝保存
@@ -1643,7 +1644,7 @@ function createUrlItem(result, index) {
               chrome.storage.local.set({ bookmarkCheckResults: stateCopy });
               console.log("保存后结果数量:", stateCopy.results.length);
             }, 100);
-            
+
             showMessage('书签已删除');
           } else {
             showMessage('未找到对应的书签', true);
@@ -1771,7 +1772,7 @@ function updateUrlItemStatus(statusElement, status) {
             deleteButton.title = "删除书签";
             deleteButton.addEventListener("click", async (e) => {
               e.stopPropagation();
-              
+
               // 确认删除
               if (confirm(`确定要删除书签 "${result.title}" 吗？`)) {
                 try {
@@ -1780,28 +1781,28 @@ function updateUrlItemStatus(statusElement, status) {
                   if (bookmarkId) {
                     // 删除书签
                     await chrome.bookmarks.remove(bookmarkId);
-                    
+
                     // 从结果中移除
                     const index = checkingStatus.results.findIndex(r => r.url === result.url);
                     if (index !== -1) {
                       checkingStatus.results.splice(index, 1);
                     }
-                    
+
                     // 从UI中移除 - 使用安全的方式
                     if (urlItem && urlItem.parentNode) {
                       urlItem.parentNode.removeChild(urlItem);
                     }
-                    
+
                     // 更新UI - 使用安全的方式
                     try {
                       updateResultsUI();
                     } catch (uiError) {
                       console.error('更新UI时出错:', uiError);
                     }
-                    
+
                     // 保存状态
                     saveCheckResults();
-                    
+
                     showMessage('书签已删除');
                   } else {
                     showMessage('未找到对应的书签', true);
@@ -1923,32 +1924,32 @@ function populateInvalidList() {
     // 获取失效书签列表容器
     const invalidList = document.getElementById('invalidList');
     if (!invalidList) return;
-    
+
     // 清空列表
     invalidList.innerHTML = '';
-    
+
     // 筛选出失效的书签
     const invalidBookmarks = checkingStatus.results.filter(result => result.status === false);
-    
+
     // 为每个失效书签创建列表项
     invalidBookmarks.forEach(async (bookmark) => {
       try {
         // 查找书签ID
         const bookmarkId = await findBookmarkIdByUrl(bookmark.url);
         if (!bookmarkId) return;
-        
+
         const item = document.createElement('div');
         item.className = 'invalid-bookmark-item';
         item.dataset.bookmarkId = bookmarkId;
         item.dataset.url = bookmark.url;
-        
+
         const title = document.createElement('div');
         title.className = 'invalid-title';
         title.textContent = bookmark.title || '无标题';
-        
+
         const actions = document.createElement('div');
         actions.className = 'invalid-actions-item';
-        
+
         // 添加删除按钮
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'icon-btn delete';
@@ -1958,42 +1959,42 @@ function populateInvalidList() {
           if (confirm(`确定要删除书签 "${bookmark.title}" 吗？`)) {
             try {
               await chrome.bookmarks.remove(bookmarkId);
-              
+
               // 从结果中移除
               const index = checkingStatus.results.findIndex(r => r.url === bookmark.url);
               if (index !== -1) {
                 checkingStatus.results.splice(index, 1);
               }
-              
+
               // 从UI中移除 - 使用安全的方式
               if (item && item.parentNode) {
                 item.parentNode.removeChild(item);
               }
-              
+
               // 检查是否还有其他失效书签
               const remainingInvalidBookmarks = checkingStatus.results.some(r => r.status === false);
-              
+
               // 如果没有其他失效书签，隐藏失效书签管理区域
               const invalidBookmarks = document.getElementById('invalidBookmarks');
               if (invalidBookmarks && !remainingInvalidBookmarks) {
                 invalidBookmarks.style.display = 'none';
               }
-              
+
               // 更新主结果列表中对应的项
               const resultsContainer = document.getElementById('resultsContainer');
               if (resultsContainer) {
                 const resultItem = Array.from(resultsContainer.children).find(item => {
                   return item.dataset.url === bookmark.url;
                 });
-                
+
                 if (resultItem && resultItem.parentNode) {
                   resultItem.parentNode.removeChild(resultItem);
                 }
               }
-              
+
               // 保存状态
               saveCheckResults();
-              
+
               showMessage('书签已删除');
             } catch (error) {
               console.error('删除书签时出错:', error);
@@ -2001,7 +2002,7 @@ function populateInvalidList() {
             }
           }
         });
-        
+
         actions.appendChild(deleteBtn);
         item.appendChild(title);
         item.appendChild(actions);
@@ -2029,13 +2030,13 @@ function updateResultsUI() {
       const url = item.getAttribute('data-url');
       if (url) urlToElement.set(url, item);
     });
-    
+
     checkingStatus.results.forEach((result, index) => {
       let urlItem;
       if (urlToElement.has(result.url)) {
         urlItem = urlToElement.get(result.url);
         urlToElement.delete(result.url);
-        
+
         urlItem.setAttribute('data-index', index);
         const titleElement = urlItem.querySelector('.url-title');
         if (titleElement) titleElement.textContent = result.title || '无标题';
@@ -2046,7 +2047,7 @@ function updateResultsUI() {
       }
       fragment.appendChild(urlItem);
     });
-    
+
     resultsContainer.innerHTML = '';
     resultsContainer.appendChild(fragment);
   } catch (error) {
@@ -2061,7 +2062,7 @@ function saveCheckResults() {
     console.warn("避免保存空结果数组");
     return;
   }
-  
+
   // 创建深拷贝，避免引用问题
   const stateCopy = JSON.parse(JSON.stringify(checkingStatus));
   console.log("保存状态，结果数量:", stateCopy.results.length);
@@ -2099,9 +2100,9 @@ window.addEventListener("beforeunload", function () {
 });
 function addCustomStyles() {
   // 获取用户设置的主题色
-  chrome.storage.sync.get(['themeColor'], function(result) {
+  chrome.storage.sync.get(['themeColor'], function (result) {
     const themeColor = result.themeColor || '#4285f4'; // 默认使用蓝色
-    
+
     // 创建样式元素
     const styleElement = document.createElement('style');
     styleElement.textContent = `
@@ -2128,7 +2129,7 @@ function addCustomStyles() {
         background-color: var(--theme-color-light) !important;
       }
     `;
-    
+
     // 将样式添加到文档头部
     document.head.appendChild(styleElement);
   });
@@ -2171,37 +2172,37 @@ function showExportModal() {
       </div>
     </div>
   `;
-  
+
   // 添加模态框到页面
   document.body.insertAdjacentHTML('beforeend', modalHTML);
-  
+
   // 获取模态框元素
   const exportModal = document.getElementById('exportModal');
   const modalCloseBtn = document.getElementById('modalCloseBtn');
   const modalCancelBtn = document.getElementById('modalCancelBtn');
   const modalExportBtn = document.getElementById('modalExportBtn');
   const modalFolderSelect = document.getElementById('modalFolderSelect');
-  
+
   // 关闭模态框函数
   const closeModal = () => {
     if (exportModal) {
       document.body.removeChild(exportModal);
     }
   };
-  
+
   // 添加事件监听器
   modalCloseBtn.addEventListener('click', closeModal);
   modalCancelBtn.addEventListener('click', closeModal);
-  
+
   // 导出按钮点击事件
   modalExportBtn.addEventListener('click', async () => {
     const formatSelect = document.getElementById('modalExportFormat');
     const format = formatSelect.value;
     const selectedFolder = modalFolderSelect.value;
-    
+
     // 关闭模态框
     closeModal();
-    
+
     // 根据选择的格式导出书签
     switch (format) {
       case 'json':
@@ -2220,15 +2221,15 @@ function showExportModal() {
         showMessage('不支持的导出格式');
     }
   });
-  
+
   // 获取并添加文件夹选项
   chrome.bookmarks.getTree(async (bookmarks) => {
     const folders = getAllBookmarkFolders(bookmarks);
     folders.sort((a, b) => a.title.localeCompare(b.title));
-    
+
     folders.forEach(folder => {
       if (!folder.title) return;
-      
+
       const option = document.createElement('option');
       option.value = folder.id;
       option.textContent = folder.title;
@@ -2238,7 +2239,7 @@ function showExportModal() {
 }
 
 // 在您的popup.js文件中添加
-document.getElementById('importBtn').addEventListener('click', function() {
+document.getElementById('importBtn').addEventListener('click', function () {
   document.getElementById('importFile').click();
 });
 
