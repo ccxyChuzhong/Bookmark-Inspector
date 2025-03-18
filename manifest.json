@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "书签管理器",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "一款支持导入导出和验证书签的工具",
   "permissions": [
     "bookmarks",
