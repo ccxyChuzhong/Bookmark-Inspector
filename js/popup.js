@@ -46,11 +46,67 @@ function importBookmarks(event) {
 // 处理导入的书签数据
 async function processImport(bookmarks) {
   try {
-    // 递归创建书签
-    await createBookmarksRecursively(bookmarks[0].children);
-    showMessage("书签导入成功！");
+    // 确保bookmarks是有效的数据
+    if (!bookmarks) {
+      throw new Error('无效的JSON数据');
+    }
+    
+    // 获取当前选中的文件夹ID
+    const selectedFolderId = document.getElementById('folderSelect')?.value;
+    const targetFolderId = (selectedFolderId && selectedFolderId !== 'all') ? selectedFolderId : '1'; // 默认使用书签栏
+    
+    // 确保bookmarks是数组
+    const bookmarksArray = Array.isArray(bookmarks) ? bookmarks : [bookmarks];
+    
+    // 直接导入所有书签
+    for (const item of bookmarksArray) {
+      await importBookmarkItem(item, targetFolderId);
+    }
+    
+    showMessage('书签导入成功！');
   } catch (error) {
-    showMessage("导入过程中出错: " + error.message);
+    throw new Error('JSON导入失败: ' + error.message);
+  }
+}
+
+// 导入单个书签项
+async function importBookmarkItem(item, parentId) {
+  try {
+    // 检查是否是有效的对象
+    if (!item || typeof item !== 'object') return;
+    
+    // 获取必要的属性
+    const url = item.url;
+    const title = item.title || '未命名';
+    const children = item.children;
+    
+    if (url) {
+      // 创建书签
+      await chrome.bookmarks.create({
+        parentId: parentId,
+        title: title,
+        url: url
+      });
+    } else if (children && Array.isArray(children)) {
+      // 创建文件夹
+      const newFolder = await chrome.bookmarks.create({
+        parentId: parentId,
+        title: title
+      });
+      
+      // 递归导入子项
+      for (const child of children) {
+        await importBookmarkItem(child, newFolder.id);
+      }
+    } else {
+      // 创建空文件夹
+      await chrome.bookmarks.create({
+        parentId: parentId,
+        title: title
+      });
+    }
+  } catch (error) {
+    console.error('创建书签项失败:', error);
   }
 }
 
@@ -594,27 +650,41 @@ async function exportBookmarksAsMarkdown(selectedFolder = 'all') {
   }
 }
 
-// 修改原有的exportBookmarks函数名为exportBookmarksAsJSON
+// 修改现有的导出书签为JSON函数
 async function exportBookmarksAsJSON(selectedFolder = 'all') {
   try {
-    const bookmarks = await getAllBookmarks();
+    let bookmarksToExport = [];
     
-    // 如果选择了特定文件夹，筛选书签
-    let bookmarksToExport = bookmarks;
-    if (selectedFolder !== 'all') {
-      // 为节点添加路径信息
-      addPathToNodes(bookmarks);
+    if (selectedFolder === 'all') {
+      // 获取所有书签
+      const bookmarkTree = await chrome.bookmarks.getTree();
+      const rootNode = bookmarkTree[0];
       
-      // 筛选出选定文件夹下的书签
-      bookmarksToExport = filterBookmarksByFolder(bookmarks, selectedFolder);
+      // 收集书签栏和其他书签中的所有书签
+      if (rootNode.children) {
+        for (const topFolder of rootNode.children) {
+          if (topFolder.children) {
+            for (const bookmark of topFolder.children) {
+              bookmarksToExport.push(bookmark);
+            }
+          }
+        }
+      }
+    } else {
+      // 获取选定文件夹中的书签
+      const folder = await chrome.bookmarks.getSubTree(selectedFolder);
+      if (folder && folder.length > 0 && folder[0].children) {
+        bookmarksToExport = folder[0].children;
+      }
     }
     
-    const bookmarksJson = JSON.stringify(bookmarksToExport, null, 2);
-
-    const blob = new Blob([bookmarksJson], { type: 'application/json' });
+    // 导出书签数组
+    const jsonString = JSON.stringify(bookmarksToExport, null, 2);
+    
+    const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const date = new Date().toISOString().slice(0, 10);
-    const filename = `edge_bookmarks_${date}.json`;
+    const filename = `bookmarks_${date}.json`;
 
     const a = document.createElement('a');
     a.href = url;
@@ -2242,139 +2312,458 @@ document.getElementById('importBtn').addEventListener('click', function() {
   document.getElementById('importFile').click();
 });
 
-// 导入 HTML 格式书签
-async function importBookmarksFromHTML(content) {
-  try {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(content, 'text/html');
-    const bookmarks = [];
+// 导入 HTML 格式书签  导入到一个文件夹里边的方法。
+// async function importBookmarksFromHTML(content) {
+//   try {
+//     const parser = new DOMParser();
+//     const doc = parser.parseFromString(content, 'text/html');
+//     const bookmarks = [];
     
-    // 递归处理 HTML 书签结构
-    function processHTMLNode(node, parentId = "1") {
-      const items = [];
-      const dl = node.querySelector('dl');
-      if (!dl) return items;
+//     // 递归处理 HTML 书签结构
+//     function processHTMLNode(node, parentId = "1") {
+//       const items = [];
+//       const dl = node.querySelector('dl');
+//       if (!dl) return items;
       
-      const children = dl.children;
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i];
-        if (child.tagName === 'DT') {
-          const h3 = child.querySelector('h3');
-          const a = child.querySelector('a');
+//       const children = dl.children;
+//       for (let i = 0; i < children.length; i++) {
+//         const child = children[i];
+//         if (child.tagName === 'DT') {
+//           const h3 = child.querySelector('h3');
+//           const a = child.querySelector('a');
           
-          if (h3) {
-            // 这是一个文件夹
-            const folder = {
-              title: h3.textContent,
-              children: processHTMLNode(child, parentId)
-            };
-            items.push(folder);
-          } else if (a) {
-            // 这是一个书签
-            items.push({
-              title: a.textContent,
-              url: a.href
-            });
-          }
-        }
-      }
-      return items;
-    }
+//           if (h3) {
+//             // 这是一个文件夹
+//             const folder = {
+//               title: h3.textContent,
+//               children: processHTMLNode(child, parentId)
+//             };
+//             items.push(folder);
+//           } else if (a) {
+//             // 这是一个书签
+//             items.push({
+//               title: a.textContent,
+//               url: a.href
+//             });
+//           }
+//         }
+//       }
+//       return items;
+//     }
     
-    const items = processHTMLNode(doc.body);
-    await createBookmarksRecursively(items);
-    showMessage("HTML 书签导入成功！");
-  } catch (error) {
-    showMessage("导入 HTML 失败: " + error.message, true);
-  }
-}
+//     const items = processHTMLNode(doc.body);
+//     await createBookmarksRecursively(items);
+//     showMessage("HTML 书签导入成功！");
+//   } catch (error) {
+//     showMessage("导入 HTML 失败: " + error.message, true);
+//   }
+// }
 
 // 导入 CSV 格式书签
 async function importBookmarksFromCSV(content) {
   try {
-    // 解析 CSV 内容
-    const lines = content.split(/\r?\n/);
-    const headers = lines[0].split(',');
-    const bookmarks = [];
-    const folderMap = new Map(); // 用于存储文件夹结构
-    
-    // 跳过标题行，处理每一行
-    for (let i = 1; i < lines.length; i++) {
-      if (!lines[i].trim()) continue;
-      
-      // 处理 CSV 行，考虑引号内的逗号
-      const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g)
-        .map(cell => cell.replace(/^"|"$/g, '').replace(/""/g, '"'));
-      
-      const title = row[0];
-      const url = row[1];
-      const folderPath = row[2];
-      
-      if (!url || !title) continue;
-      
-      // 创建文件夹路径
-      const folders = folderPath.split('/').filter(f => f);
-      let currentPath = '';
-      let parentId = '1';
-      
-      // 确保文件夹路径存在
-      for (const folder of folders) {
-        currentPath = currentPath ? `${currentPath}/${folder}` : folder;
-        if (!folderMap.has(currentPath)) {
-          const newFolder = await createBookmarkFolder(parentId, folder);
-          folderMap.set(currentPath, newFolder.id);
-        }
-        parentId = folderMap.get(currentPath);
-      }
-      
-      // 创建书签
-      await createBookmark(parentId, title, url);
+    const lines = content.split('\n').filter(line => line.trim());
+    if (lines.length === 0) {
+      throw new Error('CSV文件为空');
     }
     
-    showMessage("CSV 书签导入成功！");
+    // 处理标题行，考虑可能的引号和空格
+    const headers = lines[0].split(',').map(header => {
+      // 移除引号和空格
+      return header.replace(/["'\s]+/g, '').toLowerCase();
+    });
+    
+    // 更灵活地查找标题和URL列
+    let titleIndex = headers.findIndex(h => h.includes('title') || h.includes('名称') || h.includes('标题'));
+    let urlIndex = headers.findIndex(h => h.includes('url') || h.includes('链接') || h.includes('地址'));
+    const folderIndex = headers.findIndex(h => h.includes('folder') || h.includes('文件夹') || h.includes('目录'));
+    
+    // 如果没有找到明确的标题列，尝试使用第一列
+    if (titleIndex === -1) {
+      titleIndex = 0;
+      console.warn('未找到明确的标题列，使用第一列作为标题');
+    }
+    
+    // 如果没有找到明确的URL列，尝试查找包含http的列
+    if (urlIndex === -1) {
+      // 检查数据行中是否有包含http的列
+      for (let i = 1; i < Math.min(lines.length, 5); i++) {
+        const values = parseCSVLine(lines[i]);
+        for (let j = 0; j < values.length; j++) {
+          if (values[j].includes('http')) {
+            urlIndex = j;
+            console.warn(`未找到明确的URL列，使用第${j+1}列作为URL`);
+            break;
+          }
+        }
+        if (urlIndex !== -1) break;
+      }
+    }
+    
+    if (urlIndex === -1) {
+      throw new Error('CSV格式无效，无法识别URL列');
+    }
+    
+    // 获取浏览器的根书签文件夹
+    const bookmarkTree = await chrome.bookmarks.getTree();
+    const rootBookmarkFolder = bookmarkTree[0];
+    
+    // 获取书签栏和其他书签的ID
+    const bookmarkBarId = rootBookmarkFolder.children[0].id; // 通常是"1"
+    const otherBookmarksId = rootBookmarkFolder.children[1].id; // 通常是"2"
+    
+    // 获取当前选中的文件夹ID
+    const selectedFolderId = document.getElementById('folderSelect')?.value;
+    const defaultTargetId = (selectedFolderId && selectedFolderId !== 'all') ? selectedFolderId : bookmarkBarId;
+    
+    // 创建文件夹映射
+    const folderMap = new Map();
+    folderMap.set('', defaultTargetId);
+    folderMap.set('书签栏', bookmarkBarId);
+    folderMap.set('收藏夹栏', bookmarkBarId);
+    folderMap.set('bookmarksbar', bookmarkBarId);
+    folderMap.set('favoritesbar', bookmarkBarId);
+    folderMap.set('其他书签', otherBookmarksId);
+    folderMap.set('其他收藏夹', otherBookmarksId);
+    folderMap.set('otherbookmarks', otherBookmarksId);
+    folderMap.set('otherfavorites', otherBookmarksId);
+    
+    // 首先创建所有文件夹
+    if (folderIndex !== -1) {
+      const folders = new Set();
+      
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVLine(lines[i]);
+        if (values.length <= folderIndex) continue;
+        
+        const folder = values[folderIndex]?.trim() || '';
+        
+        if (folder && !folderMap.has(folder.toLowerCase())) {
+          folders.add(folder);
+        }
+      }
+      
+      // 创建文件夹
+      for (const folder of folders) {
+        // 检查是否有父文件夹路径（使用/或\分隔）
+        const pathSeparator = folder.includes('/') ? '/' : (folder.includes('\\') ? '\\' : null);
+        
+        if (pathSeparator) {
+          const parts = folder.split(pathSeparator);
+          let currentPath = '';
+          let parentFolderId = defaultTargetId;
+          
+          for (let i = 0; i < parts.length; i++) {
+            const part = parts[i].trim();
+            if (!part) continue;
+            
+            currentPath = currentPath ? currentPath + pathSeparator + part : part;
+            
+            if (!folderMap.has(currentPath.toLowerCase())) {
+              try {
+                const newFolder = await chrome.bookmarks.create({
+                  parentId: parentFolderId,
+                  title: part
+                });
+                folderMap.set(currentPath.toLowerCase(), newFolder.id);
+                parentFolderId = newFolder.id;
+              } catch (error) {
+                console.error('创建文件夹失败:', error);
+              }
+            } else {
+              parentFolderId = folderMap.get(currentPath.toLowerCase());
+            }
+          }
+        } else {
+          // 没有路径分隔符，直接创建文件夹
+          try {
+            const newFolder = await chrome.bookmarks.create({
+              parentId: defaultTargetId,
+              title: folder
+            });
+            folderMap.set(folder.toLowerCase(), newFolder.id);
+          } catch (error) {
+            console.error('创建文件夹失败:', error);
+          }
+        }
+      }
+    }
+    
+    // 然后创建所有书签
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseCSVLine(lines[i]);
+      if (values.length <= Math.max(titleIndex, urlIndex)) continue;
+      
+      const title = values[titleIndex]?.trim() || 'Untitled';
+      const url = values[urlIndex]?.trim();
+      const folder = (folderIndex !== -1 && values.length > folderIndex) ? (values[folderIndex]?.trim() || '') : '';
+      
+      if (url && url.includes('http')) {
+        try {
+          // 确定父文件夹ID
+          let parentFolderId = defaultTargetId;
+          if (folder && folderMap.has(folder.toLowerCase())) {
+            parentFolderId = folderMap.get(folder.toLowerCase());
+          }
+          
+          await chrome.bookmarks.create({
+            parentId: parentFolderId,
+            title: title,
+            url: url
+          });
+        } catch (error) {
+          console.error('创建书签失败:', error);
+        }
+      }
+    }
+    
+    showMessage('书签导入成功！');
   } catch (error) {
-    showMessage("导入 CSV 失败: " + error.message, true);
+    throw new Error('CSV导入失败: ' + error.message);
   }
+}
+
+// 解析CSV行，处理引号内的逗号
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"' && (i === 0 || line[i-1] !== '\\')) {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  // 添加最后一个字段
+  result.push(current);
+  
+  // 清理引号
+  return result.map(field => {
+    // 移除首尾引号
+    if ((field.startsWith('"') && field.endsWith('"')) || 
+        (field.startsWith("'") && field.endsWith("'"))) {
+      field = field.substring(1, field.length - 1);
+    }
+    return field.trim();
+  });
 }
 
 // 导入 Markdown 格式书签
 async function importBookmarksFromMarkdown(content) {
   try {
     const lines = content.split('\n');
-    let currentFolder = { id: "1" };
-    const folderStack = [];
     
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
+    // 获取浏览器的根书签文件夹
+    const bookmarkTree = await chrome.bookmarks.getTree();
+    const rootBookmarkFolder = bookmarkTree[0];
+    
+    // 获取书签栏和其他书签的ID
+    const bookmarkBarId = rootBookmarkFolder.children[0].id; // 通常是"1"
+    const otherBookmarksId = rootBookmarkFolder.children[1].id; // 通常是"2"
+    
+    // 获取当前选中的文件夹ID
+    const selectedFolderId = document.getElementById('folderSelect')?.value;
+    const defaultTargetId = (selectedFolderId && selectedFolderId !== 'all') ? selectedFolderId : bookmarkBarId;
+    
+    // 当前处理的文件夹ID
+    let currentFolderId = defaultTargetId;
+    let currentLevel = 0;
+    const folderStack = [{ id: defaultTargetId, level: 0 }];
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) continue;
       
-      // 处理标题（文件夹）
-      if (line.startsWith('#')) {
-        const level = line.match(/^#+/)[0].length;
-        const title = line.replace(/^#+\s*/, '');
+      // 检查是否是标题（文件夹）
+      const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const title = headingMatch[2].trim();
         
-        // 根据标题级别调整文件夹栈
-        while (folderStack.length >= level) {
-          folderStack.pop();
+        // 根据标题名称决定导入位置
+        let targetId = defaultTargetId;
+        if (title.includes('书签栏') || 
+            title.includes('收藏夹栏') || 
+            title.includes('Bookmarks bar') || 
+            title.includes('Favorites Bar')) {
+          targetId = bookmarkBarId;
+          currentFolderId = bookmarkBarId;
+          currentLevel = level;
+          folderStack.splice(1); // 清除除根外的所有文件夹
+          folderStack.push({ id: bookmarkBarId, level: level });
+        } else if (title.includes('其他书签') || 
+                   title.includes('其他收藏夹') || 
+                   title.includes('Other Bookmarks') || 
+                   title.includes('Other Favorites')) {
+          targetId = otherBookmarksId;
+          currentFolderId = otherBookmarksId;
+          currentLevel = level;
+          folderStack.splice(1); // 清除除根外的所有文件夹
+          folderStack.push({ id: otherBookmarksId, level: level });
+        } else {
+          // 处理普通文件夹
+          // 根据级别调整当前文件夹
+          while (folderStack.length > 1 && folderStack[folderStack.length - 1].level >= level) {
+            folderStack.pop();
+          }
+          
+          const parentFolderId = folderStack[folderStack.length - 1].id;
+          
+          try {
+            const newFolder = await chrome.bookmarks.create({
+              parentId: parentFolderId,
+              title: title
+            });
+            currentFolderId = newFolder.id;
+            currentLevel = level;
+            folderStack.push({ id: newFolder.id, level: level });
+          } catch (error) {
+            console.error('创建文件夹失败:', error);
+          }
         }
-        
-        const parentId = folderStack.length > 0 ? folderStack[folderStack.length - 1].id : "1";
-        const newFolder = await createBookmarkFolder(parentId, title);
-        folderStack.push(newFolder);
-        currentFolder = newFolder;
-      }
-      // 处理书签链接
-      else if (line.startsWith('-')) {
-        const match = line.match(/\[(.*?)\]\((.*?)\)/);
-        if (match) {
-          const [, title, url] = match;
-          await createBookmark(currentFolder.id, title, url);
+      } else {
+        // 检查是否是链接
+        const linkMatch = trimmedLine.match(/\[(.+?)\]\((.+?)\)/);
+        if (linkMatch) {
+          const title = linkMatch[1].trim();
+          const url = linkMatch[2].trim();
+          
+          try {
+            await chrome.bookmarks.create({
+              parentId: currentFolderId,
+              title: title,
+              url: url
+            });
+          } catch (error) {
+            console.error('创建书签失败:', error);
+          }
         }
       }
     }
     
-    showMessage("Markdown 书签导入成功！");
+    showMessage('书签导入成功！');
   } catch (error) {
-    showMessage("导入 Markdown 失败: " + error.message, true);
+    throw new Error('Markdown导入失败: ' + error.message);
+  }
+}
+
+// 从HTML导入书签
+async function importBookmarksFromHTML(content, parentId) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(content, 'text/html');
+  
+  // 查找根DL元素
+  const rootDL = doc.querySelector('dl');
+  if (!rootDL) {
+    throw new Error('未找到有效的书签结构');
+  }
+  
+  // 获取浏览器的根书签文件夹
+  const bookmarkTree = await chrome.bookmarks.getTree();
+  const rootBookmarkFolder = bookmarkTree[0];
+  
+  // 获取书签栏和其他书签的ID
+  const bookmarkBarId = rootBookmarkFolder.children[0].id; // 通常是"1"
+  const otherBookmarksId = rootBookmarkFolder.children[1].id; // 通常是"2"
+  
+  // 查找HTML中的主要书签文件夹
+  const mainFolders = rootDL.querySelectorAll(':scope > dt > h3');
+  
+  // 遍历HTML中的主要文件夹，匹配到浏览器中对应的位置
+  for (const folderHeader of mainFolders) {
+    const folderName = folderHeader.textContent.trim();
+    const dtElement = folderHeader.closest('dt');
+    const dlElement = dtElement.querySelector(':scope > dl');
+    
+    if (!dlElement) continue;
+    
+    // 根据文件夹名称决定导入位置
+    let targetId;
+    
+    // 如果用户选择了特定文件夹，优先使用该文件夹
+    if (parentId && parentId !== 'all') {
+      targetId = parentId;
+    } 
+    // 否则根据文件夹名称匹配
+    else if (folderName.includes('书签栏') || 
+             folderName.includes('收藏夹栏') || 
+             folderName.includes('Bookmarks bar') || 
+             folderName.includes('Favorites Bar')) {
+      targetId = bookmarkBarId;
+    } else if (folderName.includes('其他书签') || 
+               folderName.includes('其他收藏夹') || 
+               folderName.includes('Other Bookmarks') || 
+               folderName.includes('Other Favorites')) {
+      targetId = otherBookmarksId;
+    } else {
+      // 如果没有匹配到特定名称，默认导入到书签栏
+      targetId = bookmarkBarId;
+    }
+    
+    // 直接导入文件夹内容，不创建额外的文件夹层级
+    await processHTMLBookmarks(dlElement, targetId);
+  }
+  
+  // 如果没有找到主要文件夹，则直接处理所有内容
+  if (mainFolders.length === 0) {
+    const targetId = (parentId && parentId !== 'all') ? parentId : bookmarkBarId;
+    await processHTMLBookmarks(rootDL, targetId);
+  }
+}
+
+// 递归处理HTML书签
+async function processHTMLBookmarks(container, parentId) {
+  // 处理所有DT元素
+  const dtElements = container.querySelectorAll(':scope > dt');
+  
+  for (const dt of dtElements) {
+    // 检查是否是文件夹
+    const h3 = dt.querySelector(':scope > h3');
+    if (h3) {
+      const folderTitle = h3.textContent.trim();
+      const dl = dt.querySelector(':scope > dl');
+      
+      if (dl) {
+        // 创建文件夹
+        try {
+          const newFolder = await chrome.bookmarks.create({
+            parentId: parentId,
+            title: folderTitle
+          });
+          
+          // 递归处理子文件夹内容
+          await processHTMLBookmarks(dl, newFolder.id);
+        } catch (error) {
+          console.error('创建文件夹失败:', error);
+        }
+      }
+    } else {
+      // 检查是否是书签
+      const a = dt.querySelector(':scope > a');
+      if (a) {
+        const url = a.getAttribute('href');
+        const title = a.textContent.trim();
+        
+        if (url && title) {
+          try {
+            await chrome.bookmarks.create({
+              parentId: parentId,
+              title: title,
+              url: url
+            });
+          } catch (error) {
+            console.error('创建书签失败:', error);
+          }
+        }
+      }
+    }
   }
 }
