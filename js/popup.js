@@ -50,23 +50,63 @@ async function processImport(bookmarks) {
     if (!bookmarks) {
       throw new Error('无效的JSON数据');
     }
-    
-    // 获取当前选中的文件夹ID
-    const selectedFolderId = document.getElementById('folderSelect')?.value;
-    const targetFolderId = (selectedFolderId && selectedFolderId !== 'all') ? selectedFolderId : '1'; // 默认使用书签栏
-    
+
+    // 获取导入设置
+    const importTargetFolder = document.getElementById('importTargetFolder');
+    const importMode = document.getElementById('importMode');
+
+    const targetFolderId = importTargetFolder ? importTargetFolder.value : '1'; // 默认使用书签栏
+    const mode = importMode ? importMode.value : 'flatten'; // 默认使用平铺模式
+
     // 确保bookmarks是数组
     const bookmarksArray = Array.isArray(bookmarks) ? bookmarks : [bookmarks];
-    
-    // 直接导入所有书签
-    for (const item of bookmarksArray) {
-      await importBookmarkItem(item, targetFolderId);
+
+    if (mode === 'preserve') {
+      // 保持结构模式：保持原有的文件夹结构
+      for (const item of bookmarksArray) {
+        await importBookmarkItem(item, targetFolderId);
+      }
+    } else {
+      // 平铺模式：将所有书签平铺到目标文件夹根目录
+      const flattenedBookmarks = flattenBookmarks(bookmarksArray);
+      for (const bookmark of flattenedBookmarks) {
+        if (bookmark.url) {
+          await chrome.bookmarks.create({
+            parentId: targetFolderId,
+            title: bookmark.title || '未命名',
+            url: bookmark.url
+          });
+        }
+      }
     }
-    
+
     showMessage('书签导入成功！');
   } catch (error) {
     throw new Error('JSON导入失败: ' + error.message);
   }
+}
+
+// 平铺书签数组，将嵌套的文件夹结构中的所有书签提取出来
+function flattenBookmarks(bookmarks) {
+  const flattened = [];
+
+  function extractBookmarks(items) {
+    for (const item of items) {
+      if (item.url) {
+        // 如果是书签，直接添加到结果数组
+        flattened.push({
+          title: item.title || '未命名',
+          url: item.url
+        });
+      } else if (item.children && Array.isArray(item.children)) {
+        // 如果是文件夹，递归提取其中的书签
+        extractBookmarks(item.children);
+      }
+    }
+  }
+
+  extractBookmarks(bookmarks);
+  return flattened;
 }
 
 // 导入单个书签项
@@ -74,12 +114,12 @@ async function importBookmarkItem(item, parentId) {
   try {
     // 检查是否是有效的对象
     if (!item || typeof item !== 'object') return;
-    
+
     // 获取必要的属性
     const url = item.url;
     const title = item.title || '未命名';
     const children = item.children;
-    
+
     if (url) {
       // 创建书签
       await chrome.bookmarks.create({
@@ -93,7 +133,7 @@ async function importBookmarkItem(item, parentId) {
         parentId: parentId,
         title: title
       });
-      
+
       // 递归导入子项
       for (const child of children) {
         await importBookmarkItem(child, newFolder.id);
@@ -826,7 +866,7 @@ async function initFolderSelect() {
 
     // 完全清空下拉菜单
     folderSelect.innerHTML = '';
-    
+
     // 重新添加"全部文件夹"选项
     const allFoldersOption = document.createElement("option");
     allFoldersOption.value = "all";
@@ -846,7 +886,7 @@ async function initFolderSelect() {
     folders.forEach((folder) => {
       // 跳过没有标题的文件夹
       if (!folder.title) return;
-      
+
       const option = document.createElement("option");
       option.value = folder.id;
       option.textContent = folder.title;
@@ -855,6 +895,46 @@ async function initFolderSelect() {
   } catch (error) {
     console.error("初始化文件夹选择失败:", error);
     showMessage("加载文件夹失败", true);
+  }
+}
+
+// 初始化导入目标文件夹选择下拉菜单
+async function initImportTargetFolderSelect() {
+  try {
+    const importTargetFolder = document.getElementById("importTargetFolder");
+    if (!importTargetFolder) return;
+
+    // 完全清空下拉菜单
+    importTargetFolder.innerHTML = '';
+
+    // 添加默认的书签栏选项
+    const bookmarksBarOption = document.createElement("option");
+    bookmarksBarOption.value = "1";
+    bookmarksBarOption.textContent = "书签栏";
+    importTargetFolder.appendChild(bookmarksBarOption);
+
+    // 获取所有书签
+    const bookmarks = await getAllBookmarks();
+
+    // 获取所有文件夹
+    const folders = getAllBookmarkFolders(bookmarks);
+
+    // 按文件夹名称排序
+    folders.sort((a, b) => a.title.localeCompare(b.title));
+
+    // 添加文件夹选项，确保每个文件夹都有标题
+    folders.forEach((folder) => {
+      // 跳过没有标题的文件夹和书签栏（已经添加过了）
+      if (!folder.title || folder.id === "1") return;
+
+      const option = document.createElement("option");
+      option.value = folder.id;
+      option.textContent = folder.title;
+      importTargetFolder.appendChild(option);
+    });
+  } catch (error) {
+    console.error("初始化导入目标文件夹选择失败:", error);
+    showMessage("加载导入目标文件夹失败", true);
   }
 }
 
@@ -933,6 +1013,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 初始化文件夹选择下拉菜单
   initFolderSelect();
+
+  // 初始化导入目标文件夹选择下拉菜单
+  initImportTargetFolderSelect();
 
   // 文件夹选择变化事件监听
   if (folderSelect) {
@@ -1158,6 +1241,46 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 添加自定义样式以确保检测列表正确显示
   addCustomStyles();
+
+  // 模态对话框事件监听器
+  // 关闭按钮事件
+  const closeModal = document.getElementById('closeModal');
+  if (closeModal) {
+    closeModal.addEventListener('click', hideImportModal);
+  }
+
+  // 取消按钮事件
+  const cancelImport = document.getElementById('cancelImport');
+  if (cancelImport) {
+    cancelImport.addEventListener('click', hideImportModal);
+  }
+
+  // 确认导入按钮事件
+  const confirmImport = document.getElementById('confirmImport');
+  if (confirmImport) {
+    confirmImport.addEventListener('click', function() {
+      // 隐藏模态对话框
+      hideImportModal();
+      // 触发文件选择
+      document.getElementById('importFile').click();
+    });
+  }
+
+  // 导入模式变化事件
+  const importMode = document.getElementById('importMode');
+  if (importMode) {
+    importMode.addEventListener('change', updateModeDescription);
+  }
+
+  // 点击模态对话框背景关闭
+  const modal = document.getElementById('importModal');
+  if (modal) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) {
+        hideImportModal();
+      }
+    });
+  }
 });
 
 // 添加一个安全的元素移除函数
@@ -2307,10 +2430,47 @@ function showExportModal() {
   });
 }
 
-// 在您的popup.js文件中添加
+// 导入按钮点击事件 - 显示导入设置模态对话框
 document.getElementById('importBtn').addEventListener('click', function() {
-  document.getElementById('importFile').click();
+  showImportModal();
 });
+
+// 显示导入设置模态对话框
+function showImportModal() {
+  const modal = document.getElementById('importModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    // 初始化导入目标文件夹选择器
+    initImportTargetFolderSelect();
+    // 设置默认的模式描述
+    updateModeDescription();
+  }
+}
+
+// 隐藏导入设置模态对话框
+function hideImportModal() {
+  const modal = document.getElementById('importModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+// 更新导入模式描述
+function updateModeDescription() {
+  const importMode = document.getElementById('importMode');
+  const modeDescription = document.getElementById('modeDescription');
+
+  if (importMode && modeDescription) {
+    const mode = importMode.value;
+    if (mode === 'flatten') {
+      modeDescription.textContent = '平铺模式：将JSON文件中的所有书签提取出来，全部导入到选中文件夹的根目录下，不保持原有的文件夹结构。';
+    } else {
+      modeDescription.textContent = '保持结构：完全保持JSON文件中的原有文件夹结构，在选中的文件夹下重建相同的目录层次。';
+    }
+  }
+}
+
+
 
 // 导入 HTML 格式书签  导入到一个文件夹里边的方法。
 // async function importBookmarksFromHTML(content) {
