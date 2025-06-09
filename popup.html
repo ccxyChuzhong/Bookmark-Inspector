@@ -50,13 +50,51 @@
       </section>
   
     </main>
-    
+
     <footer class="footer">
       <div class="footer-content">
         <small>书签管理器 v1.0</small>
       </div>
     </footer>
   </div>
+
+  <!-- 导入设置模态对话框 -->
+  <div id="importModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="bi bi-upload"></i> 导入书签设置</h3>
+        <button id="closeModal" class="close-btn" type="button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="setting-group">
+          <label for="importTargetFolder" class="setting-label">导入到文件夹：</label>
+          <select id="importTargetFolder" class="folder-select" title="选择导入目标文件夹" aria-label="选择导入目标文件夹">
+            <option value="1">书签栏</option>
+            <!-- 文件夹选项将通过JavaScript动态添加 -->
+          </select>
+        </div>
+        <div class="setting-group">
+          <label for="importMode" class="setting-label">导入方式：</label>
+          <select id="importMode" class="import-mode-select" title="选择导入方式" aria-label="选择导入方式">
+            <option value="flatten">平铺模式（所有书签导入到根目录）</option>
+            <option value="preserve">保持结构（保持原有文件夹结构）</option>
+          </select>
+        </div>
+        <div class="mode-description">
+          <p id="modeDescription">平铺模式：将JSON文件中的所有书签提取出来，全部导入到选中文件夹的根目录下，不保持原有的文件夹结构。</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelImport" class="btn secondary-btn" type="button">
+          <i class="bi bi-x-circle"></i> 取消
+        </button>
+        <button id="confirmImport" class="btn primary-btn" type="button">
+          <i class="bi bi-check-circle"></i> 选择文件
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="./js/popup.js"></script>
 </body>
 </html>

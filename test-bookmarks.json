@@ -1,0 +1,54 @@
+[
+  {
+    "title": "技术学习",
+    "children": [
+      {
+        "title": "前端开发",
+        "children": [
+          {
+            "title": "Vue.js官网",
+            "url": "https://vuejs.org/"
+          },
+          {
+            "title": "React官网",
+            "url": "https://reactjs.org/"
+          }
+        ]
+      },
+      {
+        "title": "后端开发",
+        "children": [
+          {
+            "title": "Node.js官网",
+            "url": "https://nodejs.org/"
+          },
+          {
+            "title": "Python官网",
+            "url": "https://python.org/"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "title": "搜索引擎",
+    "children": [
+      {
+        "title": "Google",
+        "url": "https://google.com/"
+      },
+      {
+        "title": "百度",
+        "url": "https://baidu.com/"
+      }
+    ]
+  },
+  {
+    "title": "GitHub",
+    "url": "https://github.com/"
+  },
+  {
+    "title": "Stack Overflow",
+    "url": "https://stackoverflow.com/"
+  }
+]

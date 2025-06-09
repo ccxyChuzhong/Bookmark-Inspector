@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>简单测试</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .btn { padding: 10px 20px; margin: 10px; background: #0078d7; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; }
+    .modal-content { background: white; padding: 20px; border-radius: 8px; max-width: 400px; width: 90%; }
+    .setting-group { margin: 10px 0; }
+    .setting-label { display: block; margin-bottom: 5px; font-weight: bold; }
+    select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+    .mode-description { margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 4px; }
+    .modal-footer { margin-top: 20px; text-align: right; }
+    .modal-footer .btn { margin-left: 10px; }
+  </style>
+</head>
+<body>
+  <h1>书签导入功能测试</h1>
+  
+  <button id="importBtn" class="btn">选择文件导入</button>
+  <input type="file" id="importFile" accept=".json,.html,.csv,.md" style="display:none;">
+  
+  <div id="testOutput" style="margin-top: 20px; padding: 10px; border: 1px solid #ddd; min-height: 100px;">
+    <p>测试输出将显示在这里...</p>
+  </div>
+
+  <!-- 导入设置模态对话框 -->
+  <div id="importModal" class="modal">
+    <div class="modal-content">
+      <h3>导入书签设置</h3>
+      <div class="setting-group">
+        <label for="importTargetFolder" class="setting-label">导入到文件夹：</label>
+        <select id="importTargetFolder">
+          <option value="1">书签栏</option>
+          <option value="test-folder">测试文件夹</option>
+        </select>
+      </div>
+      <div class="setting-group">
+        <label for="importMode" class="setting-label">导入方式：</label>
+        <select id="importMode">
+          <option value="flatten">平铺模式（所有书签导入到根目录）</option>
+          <option value="preserve">保持结构（保持原有文件夹结构）</option>
+        </select>
+      </div>
+      <div class="mode-description">
+        <p id="modeDescription">平铺模式：将JSON文件中的所有书签提取出来，全部导入到选中文件夹的根目录下，不保持原有的文件夹结构。</p>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelImport" class="btn" style="background: #666;">取消</button>
+        <button id="confirmImport" class="btn">选择文件</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 模拟Chrome书签API
+    window.chrome = {
+      bookmarks: {
+        create: function(bookmark) {
+          return new Promise((resolve) => {
+            console.log('创建书签:', bookmark);
+            const testOutput = document.getElementById('testOutput');
+            const div = document.createElement('div');
+            div.style.padding = '5px';
+            div.style.borderBottom = '1px solid #eee';
+            if (bookmark.url) {
+              div.innerHTML = `📄 书签: ${bookmark.title} -> ${bookmark.url} (父文件夹: ${bookmark.parentId})`;
+            } else {
+              div.innerHTML = `📁 文件夹: ${bookmark.title} (父文件夹: ${bookmark.parentId})`;
+            }
+            testOutput.appendChild(div);
+            resolve({ id: 'mock-id-' + Date.now() });
+          });
+        }
+      }
+    };
+    
+    // 显示消息函数
+    function showMessage(text, isError = false) {
+      const testOutput = document.getElementById('testOutput');
+      const div = document.createElement('div');
+      div.style.padding = '10px';
+      div.style.margin = '5px 0';
+      div.style.borderRadius = '4px';
+      div.style.backgroundColor = isError ? '#ffebee' : '#e8f5e8';
+      div.style.color = isError ? '#c62828' : '#2e7d32';
+      div.textContent = text;
+      testOutput.appendChild(div);
+    }
+
+    // 显示导入设置模态对话框
+    function showImportModal() {
+      const modal = document.getElementById('importModal');
+      if (modal) {
+        modal.style.display = 'flex';
+        updateModeDescription();
+      }
+    }
+
+    // 隐藏导入设置模态对话框
+    function hideImportModal() {
+      const modal = document.getElementById('importModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    // 更新导入模式描述
+    function updateModeDescription() {
+      const importMode = document.getElementById('importMode');
+      const modeDescription = document.getElementById('modeDescription');
+      
+      if (importMode && modeDescription) {
+        const mode = importMode.value;
+        if (mode === 'flatten') {
+          modeDescription.textContent = '平铺模式：将JSON文件中的所有书签提取出来，全部导入到选中文件夹的根目录下，不保持原有的文件夹结构。';
+        } else {
+          modeDescription.textContent = '保持结构：完全保持JSON文件中的原有文件夹结构，在选中的文件夹下重建相同的目录层次。';
+        }
+      }
+    }
+
+    // 平铺书签数组
+    function flattenBookmarks(bookmarks) {
+      const flattened = [];
+      
+      function extractBookmarks(items) {
+        for (const item of items) {
+          if (item.url) {
+            flattened.push({
+              title: item.title || '未命名',
+              url: item.url
+            });
+          } else if (item.children && Array.isArray(item.children)) {
+            extractBookmarks(item.children);
+          }
+        }
+      }
+      
+      extractBookmarks(bookmarks);
+      return flattened;
+    }
+
+    // 导入单个书签项
+    async function importBookmarkItem(item, parentId) {
+      if (!item || typeof item !== 'object') return;
+      
+      const url = item.url;
+      const title = item.title || '未命名';
+      const children = item.children;
+      
+      if (url) {
+        await chrome.bookmarks.create({
+          parentId: parentId,
+          title: title,
+          url: url
+        });
+      } else if (children && Array.isArray(children)) {
+        const newFolder = await chrome.bookmarks.create({
+          parentId: parentId,
+          title: title
+        });
+        
+        for (const child of children) {
+          await importBookmarkItem(child, newFolder.id);
+        }
+      } else {
+        await chrome.bookmarks.create({
+          parentId: parentId,
+          title: title
+        });
+      }
+    }
+
+    // 处理导入的书签数据
+    async function processImport(bookmarks) {
+      try {
+        if (!bookmarks) {
+          throw new Error('无效的JSON数据');
+        }
+        
+        const importTargetFolder = document.getElementById('importTargetFolder');
+        const importMode = document.getElementById('importMode');
+        
+        const targetFolderId = importTargetFolder ? importTargetFolder.value : '1';
+        const mode = importMode ? importMode.value : 'flatten';
+        
+        const bookmarksArray = Array.isArray(bookmarks) ? bookmarks : [bookmarks];
+        
+        showMessage(`开始导入，模式：${mode === 'flatten' ? '平铺' : '保持结构'}，目标文件夹：${targetFolderId}`);
+        
+        if (mode === 'preserve') {
+          for (const item of bookmarksArray) {
+            await importBookmarkItem(item, targetFolderId);
+          }
+        } else {
+          const flattenedBookmarks = flattenBookmarks(bookmarksArray);
+          for (const bookmark of flattenedBookmarks) {
+            if (bookmark.url) {
+              await chrome.bookmarks.create({
+                parentId: targetFolderId,
+                title: bookmark.title || '未命名',
+                url: bookmark.url
+              });
+            }
+          }
+        }
+        
+        showMessage('书签导入成功！');
+      } catch (error) {
+        showMessage('JSON导入失败: ' + error.message, true);
+      }
+    }
+
+    // 导入书签
+    function importBookmarks(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        const content = e.target.result;
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        
+        try {
+          if (fileExtension === 'json') {
+            const bookmarks = JSON.parse(content);
+            await processImport(bookmarks);
+          } else {
+            showMessage("目前只支持JSON格式测试", true);
+          }
+        } catch (error) {
+          showMessage(`导入失败: ${error.message}`, true);
+        }
+      };
+      
+      reader.readAsText(file);
+    }
+
+    // 事件监听器
+    document.addEventListener('DOMContentLoaded', function() {
+      // 导入按钮点击事件
+      document.getElementById('importBtn').addEventListener('click', showImportModal);
+      
+      // 文件选择事件
+      document.getElementById('importFile').addEventListener('change', importBookmarks);
+      
+      // 模态对话框事件
+      document.getElementById('cancelImport').addEventListener('click', hideImportModal);
+      document.getElementById('confirmImport').addEventListener('click', function() {
+        hideImportModal();
+        document.getElementById('importFile').click();
+      });
+      
+      // 导入模式变化事件
+      document.getElementById('importMode').addEventListener('change', updateModeDescription);
+      
+      // 点击背景关闭模态对话框
+      document.getElementById('importModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+          hideImportModal();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
