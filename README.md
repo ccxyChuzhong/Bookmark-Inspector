@@ -1,4 +1,4 @@
-# 🔍 Bookmark Inspector 
+# 🔍 书签管理器-Bookmark Inspector 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/your-extension-id?label=Chrome%20Store)](https://chrome.google.com/webstore/detail/your-extension-id)
@@ -31,7 +31,7 @@
 
 ### 安装方式
 1. **浏览器商店安装**  
-   [Chrome Web Store](https://...) | [Firefox Add-ons](https://...)
+   [Chrome Web Store](https://microsoftedge.microsoft.com/addons/detail/%E4%B9%A6%E7%AD%BE%E7%AE%A1%E7%90%86%E5%99%A8/clnomppfflgjbhmpabhknaimdndgjmhd) | [Firefox Add-ons](https://microsoftedge.microsoft.com/addons/detail/%E4%B9%A6%E7%AD%BE%E7%AE%A1%E7%90%86%E5%99%A8/clnomppfflgjbhmpabhknaimdndgjmhd)
 
 2. **手动加载**  
    ```bash
@@ -77,8 +77,7 @@
 
 
 ## 🌰示例
-![image](https://github.com/user-attachments/assets/1cb06ec0-824a-4bc3-bec9-10eabdbf231e)
-![image](https://github.com/user-attachments/assets/06dd354d-e57a-42a9-8474-1283a37d1d86)
-![image](https://github.com/user-attachments/assets/c1bc648b-dfd8-4788-ab3e-f4430f324d97)
-![image](https://github.com/user-attachments/assets/ceb9d9b1-8843-4165-ba33-17042dac12a7)
-
+![image](https://github.com/user-attachments/assets/d79aa937-4499-440b-a64b-61c125d3631f)
+![image](https://github.com/user-attachments/assets/6ce757e4-7077-46d3-9128-0ae82bf0c68b)
+![image](https://github.com/user-attachments/assets/beccadad-c168-4efa-ac72-81f5f84eba8b)
+![image](https://github.com/user-attachments/assets/55c790da-c359-4be1-9730-583ef023c0e4)
