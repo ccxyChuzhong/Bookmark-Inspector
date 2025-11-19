@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>扩展设置</title>
+  <link rel="stylesheet" href="./css/bootstrap-icons.css">
+  <link rel="stylesheet" href="./css/settings.css">
+</head>
+<body>
+  <div class="settings-wrapper">
+    <header class="settings-header">
+      <h1><i class="bi bi-gear"></i> 扩展设置</h1>
+      <span>Bookmark Inspector</span>
+    </header>
+    <form id="settingsForm">
+      <section class="settings-section">
+        <h2 class="section-title">代理设置</h2>
+        <div class="toggle-row">
+          <p>检测失败时启用代理重试</p>
+          <label>
+            <input type="checkbox" id="enableProxyRetry">
+            使用代理
+          </label>
+        </div>
+        <div id="proxyFields" class="proxy-fields">
+          <div class="field-group">
+            <label for="proxyAddress">代理地址</label>
+            <input type="text" id="proxyAddress" placeholder="如 127.0.0.1">
+          </div>
+          <div class="field-group">
+            <label for="proxyPort">端口</label>
+            <input type="number" id="proxyPort" placeholder="如 7890" min="1" max="65535">
+          </div>
+          <div class="field-group">
+            <label for="proxyType">类型</label>
+            <select id="proxyType">
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+              <option value="socks5">SOCKS5</option>
+            </select>
+          </div>
+        </div>
+        <p class="warning-text">代理仅在直连失败后才会尝试，请确保地址和端口配置正确。</p>
+      </section>
+
+      <section class="settings-section">
+        <h2 class="section-title">多线程检测</h2>
+        <div class="field-group">
+          <label for="threadsPerBatch">并发检测数量</label>
+          <input type="number" id="threadsPerBatch" min="1" max="20" placeholder="每批检测数，例如 10">
+        </div>
+        <p class="warning-text">根据网络和机器性能建议设置在 5~15 之间。</p>
+      </section>
+
+      <section class="settings-section">
+        <button type="submit" class="primary-btn">
+          <i class="bi bi-check2-circle"></i> 保存设置
+        </button>
+        <div id="settingsMessage" class="message"></div>
+      </section>
+    </form>
+  </div>
+
+  <script src="./js/settings.js"></script>
+</body>
+</html>

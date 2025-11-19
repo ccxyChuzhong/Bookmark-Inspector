@@ -11,6 +11,9 @@
   <div class="container">
     <header class="header">
       <h1><i class="bi bi-bookmark-star"></i> 书签管理器</h1>
+      <button id="openSettingsBtn" class="settings-btn" title="打开设置">
+        <i class="bi bi-gear"></i>
+      </button>
     </header>
     
     <main class="main-content">
@@ -23,11 +26,12 @@
             <button id="importBtn" class="btn primary-btn full-width">
               <i class="bi bi-upload"></i> 选择文件导入
             </button>
-            <input type="file" id="importFile" accept=".json,.html,.csv,.md" style="display:none;">
+            <input type="file" id="importFile" accept=".json,.html,.csv,.md" class="hidden-input" aria-label="选择导入文件">
           </div>
           <button id="checkUrlsBtn" class="btn secondary-btn full-width">
             <i class="bi bi-check-circle"></i> 检测网址可用性
           </button>
+
           <select id="folderSelect" class="folder-select full-width" title="选择书签文件夹" aria-label="选择书签文件夹">
             <option value="all">全部文件夹</option>
             <!-- 文件夹选项将通过JavaScript动态添加 -->
@@ -40,7 +44,7 @@
       </section>
       
       <section id="checkResults" class="check-results">
-        <div id="progressContainer" class="progress-container" style="display:none;">
+        <div id="progressContainer" class="progress-container hidden">
           <div class="progress-wrapper">
             <div id="progressBar" class="progress-bar"></div>
           </div>
@@ -59,7 +63,7 @@
   </div>
 
   <!-- 导入设置模态对话框 -->
-  <div id="importModal" class="modal" style="display: none;">
+  <div id="importModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
         <h3><i class="bi bi-upload"></i> 导入书签设置</h3>

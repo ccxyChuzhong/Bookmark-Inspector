@@ -24,6 +24,18 @@ footer{
   overflow: hidden;
 }
 
+.hidden {
+  display: none;
+}
+
+.modal.hidden {
+  display: none !important;
+}
+
+.hidden-input {
+  display: none;
+}
+
 .header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -31,6 +43,11 @@ footer{
   text-align: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
 }
 
 h1 {
@@ -43,6 +60,28 @@ h1 {
   text-align: center;
   font-weight: 600;
   letter-spacing: 0.3px;
+}
+
+.settings-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.settings-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.settings-btn i {
+  font-size: 18px;
 }
 
 h1 i {
@@ -162,8 +201,8 @@ h1 i {
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -174,13 +213,13 @@ h1 i {
 @keyframes modalFadeIn {
   from {
     opacity: 0;
-    backdrop-filter: blur(0px);
     -webkit-backdrop-filter: blur(0px);
+    backdrop-filter: blur(0px);
   }
   to {
     opacity: 1;
-    backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
   }
 }
 
@@ -246,8 +285,8 @@ h1 i {
   justify-content: center;
   border-radius: 50%;
   transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .close-btn:hover {
@@ -457,24 +496,28 @@ label[for="importFile"].btn {
   border: 1px solid #e0e0e0;
   background-color: #f8f9fa;
   /* 强化硬件加速，减少闪烁 */
+  -webkit-transform: translateZ(0);
   transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* 减少will-change属性的使用，仅在真正需要时使用 */
   /* 优化滚动性能 */
   scroll-behavior: auto; /* 改为auto，避免平滑滚动引起的性能问题 */
-  overscroll-behavior: contain;
   /* 优化渲染性能 */
   contain: content;
   /* 移除不必要的过渡效果 */
   box-shadow: none;
   /* 移除不必要的transition */
-  /* 添加GPU加速 */
-  -webkit-transform: translate3d(0,0,0);
-  /* 防止闪烁 */
-  -webkit-backface-visibility: hidden;
   perspective: 1000;
+}
+
+.results-empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 14px;
+  color: #6c757d;
 }
 
 .url-item {

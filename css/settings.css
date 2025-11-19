@@ -1,0 +1,135 @@
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  margin: 0;
+  background: #f5f6fa;
+  color: #333;
+}
+
+.settings-wrapper {
+  max-width: 520px;
+  margin: 40px auto;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+.settings-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-header h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-section {
+  padding: 24px;
+  border-bottom: 1px solid #f1f1f5;
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+.section-title {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.field-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #475467;
+}
+
+.field-group input,
+.field-group select {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #d0d5dd;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.field-group input:focus,
+.field-group select:focus {
+  border-color: #7f56d9;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(127, 86, 217, 0.15);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #7f56d9 0%, #6941c6 100%);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.primary-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(127, 86, 217, 0.35);
+}
+
+.message {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  display: none;
+}
+
+.message.success {
+  background: #ecfdf3;
+  color: #027a48;
+  display: block;
+}
+
+.message.error {
+  background: #fef3f2;
+  color: #b42318;
+  display: block;
+}
+
+.proxy-fields {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.warning-text {
+  font-size: 13px;
+  color: #475467;
+  margin-top: 8px;
+}

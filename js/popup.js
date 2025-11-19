@@ -4,8 +4,32 @@ let checkingStatus = {
   total: 0,
   checked: 0,
   results: [],
-  invalidCount: 0
+  invalidCount: 0,
+  phase: 'direct',
+  batchSize: 5,
+  proxyApplied: false
 };
+
+const DEFAULT_SETTINGS = {
+  enableProxyRetry: false,
+  proxyType: 'http',
+  proxyAddress: '',
+  proxyPort: '',
+  threadsPerBatch: 10
+};
+
+let extensionSettings = { ...DEFAULT_SETTINGS };
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.extensionSettings) {
+    const updated = changes.extensionSettings.newValue || {};
+    extensionSettings = {
+      ...DEFAULT_SETTINGS,
+      ...updated,
+      threadsPerBatch: getThreadBatchSize(updated.threadsPerBatch)
+    };
+  }
+});
 
 // 导入书签
 function importBookmarks(event) {
@@ -940,10 +964,24 @@ async function initImportTargetFolderSelect() {
 
 // 页面加载完成后添加事件监听器
 document.addEventListener("DOMContentLoaded", async () => {
+  await loadExtensionSettings();
+
+  const settingsBtn = document.getElementById('openSettingsBtn');
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', openSettingsPage);
+  }
 
   const notificationArea = document.querySelector(".notification-area");
   if (notificationArea) {
     notificationArea.style.display = "none";
+  }
+
+  const importBtn = document.getElementById('importBtn');
+  if (importBtn) {
+    importBtn.addEventListener('click', async () => {
+      await initImportTargetFolderSelect();
+      showImportModal();
+    });
   }
   // 导出按钮点击事件处理
   const exportBtn = document.getElementById('exportBtn');
@@ -1281,6 +1319,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
   }
+
+  // 代理设置加载
 });
 
 // 添加一个安全的元素移除函数
@@ -1357,6 +1397,9 @@ async function checkAllBookmarkUrls() {
     checkingStatus.totalCount = bookmarkUrls.length;
     checkingStatus.progress = 0;
     checkingStatus.results = [];
+    checkingStatus.phase = 'direct'; // 初始化阶段为直连
+    checkingStatus.batchSize = getThreadBatchSize();
+    checkingStatus.proxyApplied = false;
 
     // 初始化结果数组
     bookmarkUrls.forEach((bookmark) => {
@@ -1414,6 +1457,9 @@ function resetCheckingStatus() {
   checkingStatus.progress = 0;
   checkingStatus.checkedCount = 0;
   checkingStatus.totalCount = 0;
+  checkingStatus.phase = 'direct';
+  checkingStatus.batchSize = getThreadBatchSize();
+  checkingStatus.proxyApplied = false;
   // checkingStatus.results = [];
 
   // 重置按钮文本
@@ -1512,6 +1558,7 @@ async function backgroundCheckUrls() {
 
   // 如果检测已被取消，立即完成检测
   if (checkingStatus.shouldCancel) {
+    await clearProxyIfNeeded();
     finishChecking(true);
     return;
   }
@@ -1524,14 +1571,51 @@ async function backgroundCheckUrls() {
     }
   });
 
-  // 如果没有待检测的URL，则完成检测
+  // 如果没有待检测的URL
   if (pendingUrls.length === 0) {
+    // 检查是否需要进入代理重试阶段
+    const useProxyRetry = extensionSettings.enableProxyRetry;
+    const hasFailures = checkingStatus.results.some(r => r.status === false);
+    
+    if (checkingStatus.phase === 'direct' && useProxyRetry && hasFailures) {
+      // 进入代理重试阶段
+      checkingStatus.phase = 'proxy';
+      showMessage("正在切换代理进行重试...");
+      
+      // 设置代理
+      const proxySet = await applyProxySettings();
+      if (!proxySet) {
+        showMessage("代理设置失败，结束检测", true);
+        await clearProxyIfNeeded();
+        finishChecking();
+        return;
+      }
+      
+      // 重置失败项的状态
+      checkingStatus.results.forEach(result => {
+        if (result.status === false) {
+          result.status = null;
+        }
+      });
+      
+      // 更新计数器
+      checkingStatus.checkedCount = checkingStatus.results.filter(r => r.status !== null).length;
+      
+      // 更新UI以反映重置的状态
+      updateCheckingProgress();
+      
+      // 继续检测
+      setTimeout(backgroundCheckUrls, 100);
+      return;
+    }
+
+    await clearProxyIfNeeded();
     finishChecking();
     return;
   }
 
   // 增加批量大小，减少批次数量和UI更新频率
-  const batchSize = 10; // 增加批量大小
+  const batchSize = Math.max(1, checkingStatus.batchSize || getThreadBatchSize());
   const batch = pendingUrls.slice(0, batchSize);
 
   // 收集所有状态更新，一次性应用
@@ -1559,6 +1643,7 @@ async function backgroundCheckUrls() {
 
     // 再次检查是否已取消，避免不必要的状态更新
     if (checkingStatus.shouldCancel) {
+      await clearProxyIfNeeded();
       finishChecking(true);
       return;
     }
@@ -1578,6 +1663,7 @@ async function backgroundCheckUrls() {
 
   // 再次检查是否已取消，避免不必要的UI更新
   if (checkingStatus.shouldCancel) {
+    await clearProxyIfNeeded();
     finishChecking(true);
     return;
   }
@@ -1648,63 +1734,31 @@ function updateCheckingResults() {
   const resultsContainer = document.getElementById("resultsContainer");
   if (!resultsContainer) return;
 
-  // 防止过于频繁的更新，使用节流控制
-  if (window.resultsUpdateThrottled) return;
-  window.resultsUpdateThrottled = true;
+  if (window.resultsUpdateScheduled) return;
+  window.resultsUpdateScheduled = true;
 
-  // 使用requestAnimationFrame确保在下一帧渲染
   requestAnimationFrame(() => {
-    // 如果容器为空，使用虚拟DOM一次性构建
-    if (!resultsContainer.children.length) {
-      // 创建离线文档片段，减少重排重绘
-      const fragment = document.createDocumentFragment();
+    const invalidItems = checkingStatus.results
+      .map((result, index) => ({ result, index }))
+      .filter((item) => item.result.status === false);
 
-      // 预先计算所有项，避免渲染过程中的计算
-      const items = checkingStatus.results.map((result, index) => {
-        return createUrlItem(result, index);
-      });
-
-      // 批量添加到文档片段
-      items.forEach((item) => fragment.appendChild(item));
-
-      // 一次性添加到DOM
-      resultsContainer.appendChild(fragment);
-    } else {
-      // 使用增量更新策略，只更新状态变化的项
-      // 创建更新批次，减少DOM操作次数
-      const updates = [];
-
-      checkingStatus.results.forEach((result, index) => {
-        const existingItem = resultsContainer.children[index];
-        if (!existingItem) return;
-
-        const urlStatus = existingItem.querySelector(".url-status");
-        if (!urlStatus) return;
-
-        // 只在状态发生变化时收集更新
-        const currentStatus = urlStatus.getAttribute("data-status");
-        const newStatus = getStatusString(result.status);
-
-        if (currentStatus !== newStatus) {
-          updates.push({ element: urlStatus, status: result.status });
-        }
-      });
-
-      // 如果有更新，使用一个微任务批量应用
-      if (updates.length > 0) {
-        // 使用微任务确保在当前帧结束前应用所有更新
-        Promise.resolve().then(() => {
-          updates.forEach((update) => {
-            updateUrlItemStatus(update.element, update.status);
-          });
-        });
-      }
+    if (invalidItems.length === 0) {
+      const emptyMessage = checkingStatus.isChecking
+        ? "正在检测，还没有发现失效书签"
+        : "没有发现失效书签";
+      resultsContainer.innerHTML = `<div class="results-empty">${emptyMessage}</div>`;
+      window.resultsUpdateScheduled = false;
+      return;
     }
 
-    // 200ms后允许下一次更新，减少更新频率
-    setTimeout(() => {
-      window.resultsUpdateThrottled = false;
-    }, 200);
+    const fragment = document.createDocumentFragment();
+    invalidItems.forEach(({ result, index }) => {
+      fragment.appendChild(createUrlItem(result, index));
+    });
+
+    resultsContainer.innerHTML = "";
+    resultsContainer.appendChild(fragment);
+    window.resultsUpdateScheduled = false;
   });
 }
 
@@ -2024,312 +2078,287 @@ function updateUrlItemStatus(statusElement, status) {
     });
   }
 }
-// 获取状态字符串
-function getStatusString(status) {
-  return status === null ? "checking" : status ? "available" : "unavailable";
+
+// 设置及代理相关函数
+async function loadExtensionSettings() {
+  try {
+    const stored = await chrome.storage.local.get('extensionSettings');
+    const savedSettings = stored.extensionSettings || {};
+    extensionSettings = {
+      ...DEFAULT_SETTINGS,
+      ...savedSettings,
+    };
+    extensionSettings.threadsPerBatch = getThreadBatchSize(extensionSettings.threadsPerBatch);
+  } catch (error) {
+    console.error('加载设置失败:', error);
+    extensionSettings = { ...DEFAULT_SETTINGS };
+  }
 }
 
-// 获取状态类名
-function getStatusClass(status) {
-  return status === null ? "checking" : status ? "available" : "unavailable";
+function getThreadBatchSize(value) {
+  const fallback = typeof value === 'undefined' ? extensionSettings.threadsPerBatch : value;
+  const parsed = parseInt(fallback, 10);
+  if (Number.isNaN(parsed)) {
+    return DEFAULT_SETTINGS.threadsPerBatch;
+  }
+  return Math.min(20, Math.max(1, parsed));
 }
 
-// 获取状态文本
-function getStatusText(status) {
-  return status === null ? "检测中" : status ? "可用" : "不可用";
+function openSettingsPage() {
+  if (chrome.runtime.openOptionsPage) {
+    chrome.runtime.openOptionsPage();
+  } else if (chrome.tabs) {
+    chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
+  }
 }
 
-// 完成检测
-function finishChecking(wasCancelled = false) {
-  // 确保在UI更新前设置状态，防止其他函数继续更新UI
-  checkingStatus.isChecking = false;
-
-  // 隐藏进度条
-  const progressContainer = document.getElementById("progressContainer");
-  if (progressContainer) progressContainer.style.display = "none";
-
-  // 重置按钮文本和状态
-  const checkUrlsBtn = document.getElementById("checkUrlsBtn");
-  if (checkUrlsBtn) {
-    checkUrlsBtn.innerHTML =
-      '<i class="bi bi-check-circle"></i> 检测网址可用性';
-    checkUrlsBtn.disabled = false;
-    checkUrlsBtn.classList.remove("disabled-btn");
+async function applyProxySettings() {
+  if (!extensionSettings.enableProxyRetry) {
+    return false;
   }
 
-  // 如果没有取消，则显示统计结果
-  if (!wasCancelled) {
-    const availableCount = checkingStatus.results.filter(
-      (r) => r.status === true
-    ).length;
-    showMessage(
-      `检测完成：${availableCount}/${checkingStatus.totalCount} 个网址可用`
+  const proxyAddress = (extensionSettings.proxyAddress || '').trim();
+  const proxyPort = parseInt(extensionSettings.proxyPort, 10);
+  const proxyType = extensionSettings.proxyType || 'http';
+
+  if (!proxyAddress || Number.isNaN(proxyPort)) {
+    console.warn('代理配置不完整，跳过代理重试');
+    return false;
+  }
+
+  const config = {
+    mode: "fixed_servers",
+    rules: {
+      singleProxy: {
+        scheme: proxyType,
+        host: proxyAddress,
+        port: proxyPort
+      },
+      bypassList: ["localhost", "127.0.0.1"]
+    }
+  };
+
+  return new Promise((resolve) => {
+    if (!chrome.proxy) {
+      console.error('没有代理权限');
+      resolve(false);
+      return;
+    }
+
+    chrome.proxy.settings.set(
+      { value: config, scope: 'regular' },
+      () => {
+        checkingStatus.proxyApplied = true;
+        console.log('代理已设置:', config);
+        resolve(true);
+      }
     );
-  } else {
-    // 如果是取消检测，显示取消完成的消息
-    showMessage("检测已取消");
-
-    // 清空结果容器，避免显示部分结果
-    const resultsContainer = document.getElementById("resultsContainer");
-    if (resultsContainer) resultsContainer.innerHTML = "";
-  }
-
-  // 取消任何待处理的UI更新
-  window.updateResultsPending = false;
-
-  // 重置检测状态
-  resetCheckingStatus();
-  // 清除localStorage中的状态
-  localStorage.removeItem("bookmarkCheckingStatus");
+  });
 }
 
-// 修改显示结果的函数，使其使用存储的结果
-function displayResults() {
-  const resultsContainer = document.getElementById("resultsContainer");
-  resultsContainer.innerHTML = "";
+async function clearProxyIfNeeded() {
+  if (!checkingStatus.proxyApplied) return;
+  await clearProxy();
+  checkingStatus.proxyApplied = false;
+}
 
-  // 显示结果区域
-  document.getElementById("checkResults").style.display = "block";
+function clearProxy() {
+  return new Promise((resolve) => {
+    if (chrome.proxy) {
+      chrome.proxy.settings.clear(
+        { scope: 'regular' },
+        () => {
+          console.log('代理已清除');
+          resolve(true);
+        }
+      );
+    } else {
+      resolve(false);
+    }
+  });
+}
 
-  // 创建并添加每个URL项
-  checkingStatus.results.forEach((result, index) => {
-    const urlItem = createUrlItem(result, index);
-    resultsContainer.appendChild(urlItem);
+function getStatusString(status) {
+  if (status === null) return 'checking';
+  return status ? 'available' : 'unavailable';
+}
+
+function getStatusClass(status) {
+  if (status === null) return 'checking';
+  return status ? 'available' : 'unavailable';
+}
+
+function getStatusText(status) {
+  if (status === null) return '检测中';
+  return status ? '可用' : '不可用';
+}
+
+function finishChecking(wasCancelled = false) {
+  clearProxyIfNeeded().catch((error) => {
+    console.warn('清除代理失败:', error);
   });
 
-  // 显示失效书签管理区域（如果有失效书签）
-  const hasInvalidBookmarks = checkingStatus.results.some(
-    (result) => result.status === false
-  );
-  document.getElementById("invalidBookmarks").style.display =
-    hasInvalidBookmarks ? "block" : "none";
+  checkingStatus.isChecking = false;
+  checkingStatus.shouldCancel = false;
 
-  // 如果有失效书签，填充失效书签列表
-  if (hasInvalidBookmarks) {
-    populateInvalidList();
+  const progressContainer = document.getElementById('progressContainer');
+  if (progressContainer) {
+    progressContainer.style.display = 'none';
   }
+
+  const checkUrlsBtn = document.getElementById('checkUrlsBtn');
+  if (checkUrlsBtn) {
+    checkUrlsBtn.innerHTML = '<i class="bi bi-check-circle"></i> 检测网址可用性';
+    checkUrlsBtn.disabled = false;
+    checkUrlsBtn.classList.remove('disabled-btn');
+  }
+
+  window.progressUpdateScheduled = false;
+
+  if (wasCancelled) {
+    showMessage('检测已取消');
+    const resultsContainer = document.getElementById('resultsContainer');
+    if (resultsContainer) {
+      resultsContainer.innerHTML = '<div class="results-empty">检测已取消，没有可显示的结果</div>';
+    }
+  } else {
+    const invalidCount = checkingStatus.results.filter((r) => r.status === false).length;
+    const summary = invalidCount > 0
+      ? `检测完成：发现 ${invalidCount} 个失效书签`
+      : '检测完成，未发现失效书签';
+    showMessage(summary);
+  }
+
+  updateCheckingResults();
+  saveCheckResults();
+  saveCheckingStatus();
 }
 
-// 填充失效书签列表
-function populateInvalidList() {
-  try {
-    // 获取失效书签列表容器
-    const invalidList = document.getElementById('invalidList');
-    if (!invalidList) return;
-    
-    // 清空列表
-    invalidList.innerHTML = '';
-    
-    // 筛选出失效的书签
-    const invalidBookmarks = checkingStatus.results.filter(result => result.status === false);
-    
-    // 为每个失效书签创建列表项
-    invalidBookmarks.forEach(async (bookmark) => {
-      try {
-        // 查找书签ID
-        const bookmarkId = await findBookmarkIdByUrl(bookmark.url);
-        if (!bookmarkId) return;
-        
-        const item = document.createElement('div');
-        item.className = 'invalid-bookmark-item';
-        item.dataset.bookmarkId = bookmarkId;
-        item.dataset.url = bookmark.url;
-        
-        const title = document.createElement('div');
-        title.className = 'invalid-title';
-        title.textContent = bookmark.title || '无标题';
-        
-        const actions = document.createElement('div');
-        actions.className = 'invalid-actions-item';
-        
-        // 添加删除按钮
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'icon-btn delete';
-        deleteBtn.innerHTML = '<i class="bi bi-trash"></i>';
-        deleteBtn.title = '删除书签';
-        deleteBtn.addEventListener('click', async () => {
-          if (confirm(`确定要删除书签 "${bookmark.title}" 吗？`)) {
-            try {
-              await chrome.bookmarks.remove(bookmarkId);
-              
-              // 从结果中移除
-              const index = checkingStatus.results.findIndex(r => r.url === bookmark.url);
-              if (index !== -1) {
-                checkingStatus.results.splice(index, 1);
-              }
-              
-              // 从UI中移除 - 使用安全的方式
-              if (item && item.parentNode) {
-                item.parentNode.removeChild(item);
-              }
-              
-              // 检查是否还有其他失效书签
-              const remainingInvalidBookmarks = checkingStatus.results.some(r => r.status === false);
-              
-              // 如果没有其他失效书签，隐藏失效书签管理区域
-              const invalidBookmarks = document.getElementById('invalidBookmarks');
-              if (invalidBookmarks && !remainingInvalidBookmarks) {
-                invalidBookmarks.style.display = 'none';
-              }
-              
-              // 更新主结果列表中对应的项
-              const resultsContainer = document.getElementById('resultsContainer');
-              if (resultsContainer) {
-                const resultItem = Array.from(resultsContainer.children).find(item => {
-                  return item.dataset.url === bookmark.url;
-                });
-                
-                if (resultItem && resultItem.parentNode) {
-                  resultItem.parentNode.removeChild(resultItem);
-                }
-              }
-              
-              // 保存状态
-              saveCheckResults();
-              
-              showMessage('书签已删除');
-            } catch (error) {
-              console.error('删除书签时出错:', error);
-              showMessage('删除书签失败: ' + error.message, true);
-            }
-          }
-        });
-        
-        actions.appendChild(deleteBtn);
-        item.appendChild(title);
-        item.appendChild(actions);
-        invalidList.appendChild(item);
-      } catch (error) {
-        console.error('创建失效书签项时出错:', error);
-      }
-    });
-  } catch (error) {
-    console.error('填充失效书签列表时出错:', error);
+function displayResults() {
+  const resultsContainer = document.getElementById('resultsContainer');
+  if (!resultsContainer) return;
+
+  if (!checkingStatus.results || checkingStatus.results.length === 0) {
+    resultsContainer.innerHTML = '<div class="results-empty">暂无检测结果</div>';
+    return;
   }
+
+  checkingStatus.totalCount = checkingStatus.results.length;
+  checkingStatus.checkedCount = checkingStatus.results.filter((r) => r.status !== null).length;
+
+  updateCheckingProgress();
+  updateCheckingResults();
+}
+
+function populateInvalidList() {
+  updateCheckingResults();
 }
 
 function updateResultsUI() {
-  try {
-    const resultsContainer = document.getElementById('resultsContainer');
-    if (!resultsContainer) return;
-    if (!checkingStatus.results || checkingStatus.results.length === 0) {
-      resultsContainer.innerHTML = '<div class="text-center p-3">没有找到书签</div>';
-      return;
-    }
-    const fragment = document.createDocumentFragment();
-    const urlToElement = new Map();
-    Array.from(resultsContainer.children).forEach(item => {
-      const url = item.getAttribute('data-url');
-      if (url) urlToElement.set(url, item);
-    });
-    
-    checkingStatus.results.forEach((result, index) => {
-      let urlItem;
-      if (urlToElement.has(result.url)) {
-        urlItem = urlToElement.get(result.url);
-        urlToElement.delete(result.url);
-        
-        urlItem.setAttribute('data-index', index);
-        const titleElement = urlItem.querySelector('.url-title');
-        if (titleElement) titleElement.textContent = result.title || '无标题';
-        const statusElement = urlItem.querySelector('.url-status');
-        if (statusElement) updateUrlItemStatus(statusElement, result.status);
-      } else {
-        urlItem = createUrlItem(result, index);
-      }
-      fragment.appendChild(urlItem);
-    });
-    
-    resultsContainer.innerHTML = '';
-    resultsContainer.appendChild(fragment);
-  } catch (error) {
-    console.error('更新结果UI时出错:', error);
-  }
+  updateCheckingResults();
 }
 
-// 保存检测结果到存储
 function saveCheckResults() {
-  // 确保不保存空结果
   if (!checkingStatus.results || checkingStatus.results.length === 0) {
-    console.warn("避免保存空结果数组");
+    chrome.storage.local.remove('bookmarkCheckResults');
     return;
   }
-  
-  // 创建深拷贝，避免引用问题
+
   const stateCopy = JSON.parse(JSON.stringify(checkingStatus));
-  console.log("保存状态，结果数量:", stateCopy.results.length);
   chrome.storage.local.set({ bookmarkCheckResults: stateCopy });
 }
 
-// 打开独立窗口的函数
 async function openDetachedWindow() {
-  // 获取当前窗口的位置和大小
   const currentWindow = await chrome.windows.getCurrent();
 
-  // 创建新窗口
   const newWindow = await chrome.windows.create({
-    url: chrome.runtime.getURL("popup.html?detached=true"),
-    type: "popup",
+    url: chrome.runtime.getURL('popup.html?detached=true'),
+    type: 'popup',
     width: 450,
     height: 600,
-    left: currentWindow.left + 50,
-    top: currentWindow.top + 50,
+    left: (currentWindow.left || 0) + 50,
+    top: (currentWindow.top || 0) + 50
   });
 
-  // 保存新窗口ID
   await chrome.storage.local.set({ detachedWindowId: newWindow.id });
 }
 
-// 在窗口关闭时清除存储的窗口ID
-window.addEventListener("beforeunload", function () {
-  // 检查是否是独立窗口
-  const isDetached =
-    new URLSearchParams(window.location.search).get("detached") === "true";
-
+window.addEventListener('beforeunload', () => {
+  const isDetached = new URLSearchParams(window.location.search).get('detached') === 'true';
   if (isDetached) {
-    chrome.storage.local.remove("detachedWindowId");
+    chrome.storage.local.remove('detachedWindowId');
   }
 });
+
 function addCustomStyles() {
-  // 获取用户设置的主题色
-  chrome.storage.sync.get(['themeColor'], function(result) {
-    const themeColor = result.themeColor || '#4285f4'; // 默认使用蓝色
-    
-    // 创建样式元素
+  chrome.storage.sync.get(['themeColor'], (result) => {
+    const themeColor = result.themeColor || '#4285f4';
     const styleElement = document.createElement('style');
     styleElement.textContent = `
       :root {
         --theme-color: ${themeColor};
         --theme-color-light: ${themeColor}33;
       }
-      
+
       .btn-primary, .badge-primary {
         background-color: var(--theme-color) !important;
         border-color: var(--theme-color) !important;
       }
-      
+
       .text-primary {
         color: var(--theme-color) !important;
       }
-      
+
       .btn-outline-primary {
         color: var(--theme-color) !important;
         border-color: var(--theme-color) !important;
       }
-      
+
       .btn-outline-primary:hover {
         background-color: var(--theme-color-light) !important;
       }
     `;
-    
-    // 将样式添加到文档头部
+
     document.head.appendChild(styleElement);
   });
 }
 
+function showImportModal() {
+  const modal = document.getElementById('importModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  updateModeDescription();
+}
+
+function hideImportModal() {
+  const modal = document.getElementById('importModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function updateModeDescription() {
+  const importMode = document.getElementById('importMode');
+  const modeDescription = document.getElementById('modeDescription');
+  if (!importMode || !modeDescription) return;
+
+  const descriptions = {
+    flatten: '平铺模式：将JSON文件中的所有书签提取出来，全部导入到选中文件夹根目录，不保留原有结构。',
+    preserve: '保持结构：按照原始文件夹层级在目标文件夹下重建目录结构。'
+  };
+
+  modeDescription.textContent = descriptions[importMode.value] || descriptions.flatten;
+}
+
 // 显示导出书签弹框
-function showExportModal() {
-  // 创建模态框HTML
+async function showExportModal() {
+  // 如果已经存在弹框，先移除避免重复
+  const existingModal = document.getElementById('exportModal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+
   const modalHTML = `
     <div class="modal-overlay" id="exportModal">
       <div class="modal-container">
@@ -2353,7 +2382,6 @@ function showExportModal() {
             <label for="modalFolderSelect">选择文件夹：</label>
             <select id="modalFolderSelect" class="modal-select">
               <option value="all">全部文件夹</option>
-              <!-- 文件夹选项将通过JavaScript动态添加 -->
             </select>
           </div>
           <div class="modal-buttons">
@@ -2364,566 +2392,77 @@ function showExportModal() {
       </div>
     </div>
   `;
-  
-  // 添加模态框到页面
+
   document.body.insertAdjacentHTML('beforeend', modalHTML);
-  
-  // 获取模态框元素
+
   const exportModal = document.getElementById('exportModal');
   const modalCloseBtn = document.getElementById('modalCloseBtn');
   const modalCancelBtn = document.getElementById('modalCancelBtn');
   const modalExportBtn = document.getElementById('modalExportBtn');
   const modalFolderSelect = document.getElementById('modalFolderSelect');
-  
-  // 关闭模态框函数
+  const modalExportFormat = document.getElementById('modalExportFormat');
+
+  if (!exportModal || !modalFolderSelect || !modalExportFormat || !modalExportBtn) {
+    console.error('导出模态框初始化失败');
+    return;
+  }
+
   const closeModal = () => {
-    if (exportModal) {
-      document.body.removeChild(exportModal);
+    if (exportModal && exportModal.parentNode) {
+      // 移除 DOM 中的模态框
+      exportModal.parentNode.removeChild(exportModal);
     }
   };
-  
-  // 添加事件监听器
-  modalCloseBtn.addEventListener('click', closeModal);
-  modalCancelBtn.addEventListener('click', closeModal);
-  
-  // 导出按钮点击事件
+
+  if (modalCloseBtn) {
+    modalCloseBtn.addEventListener('click', closeModal);
+  }
+  if (modalCancelBtn) {
+    modalCancelBtn.addEventListener('click', closeModal);
+  }
+
   modalExportBtn.addEventListener('click', async () => {
-    const formatSelect = document.getElementById('modalExportFormat');
-    const format = formatSelect.value;
+    const format = modalExportFormat.value;
     const selectedFolder = modalFolderSelect.value;
-    
-    // 关闭模态框
     closeModal();
-    
-    // 根据选择的格式导出书签
-    switch (format) {
-      case 'json':
-        await exportBookmarksAsJSON(selectedFolder);
-        break;
-      case 'html':
-        await exportBookmarksAsHTML(selectedFolder);
-        break;
-      case 'csv':
-        await exportBookmarksAsCSV(selectedFolder);
-        break;
-      case 'markdown':
-        await exportBookmarksAsMarkdown(selectedFolder);
-        break;
-      default:
-        showMessage('不支持的导出格式');
+
+    try {
+      switch (format) {
+        case 'json':
+          await exportBookmarksAsJSON(selectedFolder);
+          break;
+        case 'html':
+          await exportBookmarksAsHTML(selectedFolder);
+          break;
+        case 'csv':
+          await exportBookmarksAsCSV(selectedFolder);
+          break;
+        case 'markdown':
+          await exportBookmarksAsMarkdown(selectedFolder);
+          break;
+        default:
+          showMessage('不支持的导出格式', true);
+      }
+    } catch (error) {
+      console.error('导出失败:', error);
+      showMessage('导出失败: ' + error.message, true);
     }
   });
-  
-  // 获取并添加文件夹选项
-  chrome.bookmarks.getTree(async (bookmarks) => {
+
+  try {
+    const bookmarks = await getAllBookmarks();
     const folders = getAllBookmarkFolders(bookmarks);
     folders.sort((a, b) => a.title.localeCompare(b.title));
-    
+
     folders.forEach(folder => {
       if (!folder.title) return;
-      
       const option = document.createElement('option');
       option.value = folder.id;
       option.textContent = folder.title;
       modalFolderSelect.appendChild(option);
     });
-  });
-}
-
-// 导入按钮点击事件 - 显示导入设置模态对话框
-document.getElementById('importBtn').addEventListener('click', function() {
-  showImportModal();
-});
-
-// 显示导入设置模态对话框
-function showImportModal() {
-  const modal = document.getElementById('importModal');
-  if (modal) {
-    modal.style.display = 'flex';
-    // 初始化导入目标文件夹选择器
-    initImportTargetFolderSelect();
-    // 设置默认的模式描述
-    updateModeDescription();
-  }
-}
-
-// 隐藏导入设置模态对话框
-function hideImportModal() {
-  const modal = document.getElementById('importModal');
-  if (modal) {
-    modal.style.display = 'none';
-  }
-}
-
-// 更新导入模式描述
-function updateModeDescription() {
-  const importMode = document.getElementById('importMode');
-  const modeDescription = document.getElementById('modeDescription');
-
-  if (importMode && modeDescription) {
-    const mode = importMode.value;
-    if (mode === 'flatten') {
-      modeDescription.textContent = '平铺模式：将JSON文件中的所有书签提取出来，全部导入到选中文件夹的根目录下，不保持原有的文件夹结构。';
-    } else {
-      modeDescription.textContent = '保持结构：完全保持JSON文件中的原有文件夹结构，在选中的文件夹下重建相同的目录层次。';
-    }
-  }
-}
-
-
-
-// 导入 HTML 格式书签  导入到一个文件夹里边的方法。
-// async function importBookmarksFromHTML(content) {
-//   try {
-//     const parser = new DOMParser();
-//     const doc = parser.parseFromString(content, 'text/html');
-//     const bookmarks = [];
-    
-//     // 递归处理 HTML 书签结构
-//     function processHTMLNode(node, parentId = "1") {
-//       const items = [];
-//       const dl = node.querySelector('dl');
-//       if (!dl) return items;
-      
-//       const children = dl.children;
-//       for (let i = 0; i < children.length; i++) {
-//         const child = children[i];
-//         if (child.tagName === 'DT') {
-//           const h3 = child.querySelector('h3');
-//           const a = child.querySelector('a');
-          
-//           if (h3) {
-//             // 这是一个文件夹
-//             const folder = {
-//               title: h3.textContent,
-//               children: processHTMLNode(child, parentId)
-//             };
-//             items.push(folder);
-//           } else if (a) {
-//             // 这是一个书签
-//             items.push({
-//               title: a.textContent,
-//               url: a.href
-//             });
-//           }
-//         }
-//       }
-//       return items;
-//     }
-    
-//     const items = processHTMLNode(doc.body);
-//     await createBookmarksRecursively(items);
-//     showMessage("HTML 书签导入成功！");
-//   } catch (error) {
-//     showMessage("导入 HTML 失败: " + error.message, true);
-//   }
-// }
-
-// 导入 CSV 格式书签
-async function importBookmarksFromCSV(content) {
-  try {
-    const lines = content.split('\n').filter(line => line.trim());
-    if (lines.length === 0) {
-      throw new Error('CSV文件为空');
-    }
-    
-    // 处理标题行，考虑可能的引号和空格
-    const headers = lines[0].split(',').map(header => {
-      // 移除引号和空格
-      return header.replace(/["'\s]+/g, '').toLowerCase();
-    });
-    
-    // 更灵活地查找标题和URL列
-    let titleIndex = headers.findIndex(h => h.includes('title') || h.includes('名称') || h.includes('标题'));
-    let urlIndex = headers.findIndex(h => h.includes('url') || h.includes('链接') || h.includes('地址'));
-    const folderIndex = headers.findIndex(h => h.includes('folder') || h.includes('文件夹') || h.includes('目录'));
-    
-    // 如果没有找到明确的标题列，尝试使用第一列
-    if (titleIndex === -1) {
-      titleIndex = 0;
-      console.warn('未找到明确的标题列，使用第一列作为标题');
-    }
-    
-    // 如果没有找到明确的URL列，尝试查找包含http的列
-    if (urlIndex === -1) {
-      // 检查数据行中是否有包含http的列
-      for (let i = 1; i < Math.min(lines.length, 5); i++) {
-        const values = parseCSVLine(lines[i]);
-        for (let j = 0; j < values.length; j++) {
-          if (values[j].includes('http')) {
-            urlIndex = j;
-            console.warn(`未找到明确的URL列，使用第${j+1}列作为URL`);
-            break;
-          }
-        }
-        if (urlIndex !== -1) break;
-      }
-    }
-    
-    if (urlIndex === -1) {
-      throw new Error('CSV格式无效，无法识别URL列');
-    }
-    
-    // 获取浏览器的根书签文件夹
-    const bookmarkTree = await chrome.bookmarks.getTree();
-    const rootBookmarkFolder = bookmarkTree[0];
-    
-    // 获取书签栏和其他书签的ID
-    const bookmarkBarId = rootBookmarkFolder.children[0].id; // 通常是"1"
-    const otherBookmarksId = rootBookmarkFolder.children[1].id; // 通常是"2"
-    
-    // 获取当前选中的文件夹ID
-    const selectedFolderId = document.getElementById('folderSelect')?.value;
-    const defaultTargetId = (selectedFolderId && selectedFolderId !== 'all') ? selectedFolderId : bookmarkBarId;
-    
-    // 创建文件夹映射
-    const folderMap = new Map();
-    folderMap.set('', defaultTargetId);
-    folderMap.set('书签栏', bookmarkBarId);
-    folderMap.set('收藏夹栏', bookmarkBarId);
-    folderMap.set('bookmarksbar', bookmarkBarId);
-    folderMap.set('favoritesbar', bookmarkBarId);
-    folderMap.set('其他书签', otherBookmarksId);
-    folderMap.set('其他收藏夹', otherBookmarksId);
-    folderMap.set('otherbookmarks', otherBookmarksId);
-    folderMap.set('otherfavorites', otherBookmarksId);
-    
-    // 首先创建所有文件夹
-    if (folderIndex !== -1) {
-      const folders = new Set();
-      
-      for (let i = 1; i < lines.length; i++) {
-        const values = parseCSVLine(lines[i]);
-        if (values.length <= folderIndex) continue;
-        
-        const folder = values[folderIndex]?.trim() || '';
-        
-        if (folder && !folderMap.has(folder.toLowerCase())) {
-          folders.add(folder);
-        }
-      }
-      
-      // 创建文件夹
-      for (const folder of folders) {
-        // 检查是否有父文件夹路径（使用/或\分隔）
-        const pathSeparator = folder.includes('/') ? '/' : (folder.includes('\\') ? '\\' : null);
-        
-        if (pathSeparator) {
-          const parts = folder.split(pathSeparator);
-          let currentPath = '';
-          let parentFolderId = defaultTargetId;
-          
-          for (let i = 0; i < parts.length; i++) {
-            const part = parts[i].trim();
-            if (!part) continue;
-            
-            currentPath = currentPath ? currentPath + pathSeparator + part : part;
-            
-            if (!folderMap.has(currentPath.toLowerCase())) {
-              try {
-                const newFolder = await chrome.bookmarks.create({
-                  parentId: parentFolderId,
-                  title: part
-                });
-                folderMap.set(currentPath.toLowerCase(), newFolder.id);
-                parentFolderId = newFolder.id;
-              } catch (error) {
-                console.error('创建文件夹失败:', error);
-              }
-            } else {
-              parentFolderId = folderMap.get(currentPath.toLowerCase());
-            }
-          }
-        } else {
-          // 没有路径分隔符，直接创建文件夹
-          try {
-            const newFolder = await chrome.bookmarks.create({
-              parentId: defaultTargetId,
-              title: folder
-            });
-            folderMap.set(folder.toLowerCase(), newFolder.id);
-          } catch (error) {
-            console.error('创建文件夹失败:', error);
-          }
-        }
-      }
-    }
-    
-    // 然后创建所有书签
-    for (let i = 1; i < lines.length; i++) {
-      const values = parseCSVLine(lines[i]);
-      if (values.length <= Math.max(titleIndex, urlIndex)) continue;
-      
-      const title = values[titleIndex]?.trim() || 'Untitled';
-      const url = values[urlIndex]?.trim();
-      const folder = (folderIndex !== -1 && values.length > folderIndex) ? (values[folderIndex]?.trim() || '') : '';
-      
-      if (url && url.includes('http')) {
-        try {
-          // 确定父文件夹ID
-          let parentFolderId = defaultTargetId;
-          if (folder && folderMap.has(folder.toLowerCase())) {
-            parentFolderId = folderMap.get(folder.toLowerCase());
-          }
-          
-          await chrome.bookmarks.create({
-            parentId: parentFolderId,
-            title: title,
-            url: url
-          });
-        } catch (error) {
-          console.error('创建书签失败:', error);
-        }
-      }
-    }
-    
-    showMessage('书签导入成功！');
   } catch (error) {
-    throw new Error('CSV导入失败: ' + error.message);
-  }
-}
-
-// 解析CSV行，处理引号内的逗号
-function parseCSVLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    
-    if (char === '"' && (i === 0 || line[i-1] !== '\\')) {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  
-  // 添加最后一个字段
-  result.push(current);
-  
-  // 清理引号
-  return result.map(field => {
-    // 移除首尾引号
-    if ((field.startsWith('"') && field.endsWith('"')) || 
-        (field.startsWith("'") && field.endsWith("'"))) {
-      field = field.substring(1, field.length - 1);
-    }
-    return field.trim();
-  });
-}
-
-// 导入 Markdown 格式书签
-async function importBookmarksFromMarkdown(content) {
-  try {
-    const lines = content.split('\n');
-    
-    // 获取浏览器的根书签文件夹
-    const bookmarkTree = await chrome.bookmarks.getTree();
-    const rootBookmarkFolder = bookmarkTree[0];
-    
-    // 获取书签栏和其他书签的ID
-    const bookmarkBarId = rootBookmarkFolder.children[0].id; // 通常是"1"
-    const otherBookmarksId = rootBookmarkFolder.children[1].id; // 通常是"2"
-    
-    // 获取当前选中的文件夹ID
-    const selectedFolderId = document.getElementById('folderSelect')?.value;
-    const defaultTargetId = (selectedFolderId && selectedFolderId !== 'all') ? selectedFolderId : bookmarkBarId;
-    
-    // 当前处理的文件夹ID
-    let currentFolderId = defaultTargetId;
-    let currentLevel = 0;
-    const folderStack = [{ id: defaultTargetId, level: 0 }];
-    
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (!trimmedLine) continue;
-      
-      // 检查是否是标题（文件夹）
-      const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
-      if (headingMatch) {
-        const level = headingMatch[1].length;
-        const title = headingMatch[2].trim();
-        
-        // 根据标题名称决定导入位置
-        let targetId = defaultTargetId;
-        if (title.includes('书签栏') || 
-            title.includes('收藏夹栏') || 
-            title.includes('Bookmarks bar') || 
-            title.includes('Favorites Bar')) {
-          targetId = bookmarkBarId;
-          currentFolderId = bookmarkBarId;
-          currentLevel = level;
-          folderStack.splice(1); // 清除除根外的所有文件夹
-          folderStack.push({ id: bookmarkBarId, level: level });
-        } else if (title.includes('其他书签') || 
-                   title.includes('其他收藏夹') || 
-                   title.includes('Other Bookmarks') || 
-                   title.includes('Other Favorites')) {
-          targetId = otherBookmarksId;
-          currentFolderId = otherBookmarksId;
-          currentLevel = level;
-          folderStack.splice(1); // 清除除根外的所有文件夹
-          folderStack.push({ id: otherBookmarksId, level: level });
-        } else {
-          // 处理普通文件夹
-          // 根据级别调整当前文件夹
-          while (folderStack.length > 1 && folderStack[folderStack.length - 1].level >= level) {
-            folderStack.pop();
-          }
-          
-          const parentFolderId = folderStack[folderStack.length - 1].id;
-          
-          try {
-            const newFolder = await chrome.bookmarks.create({
-              parentId: parentFolderId,
-              title: title
-            });
-            currentFolderId = newFolder.id;
-            currentLevel = level;
-            folderStack.push({ id: newFolder.id, level: level });
-          } catch (error) {
-            console.error('创建文件夹失败:', error);
-          }
-        }
-      } else {
-        // 检查是否是链接
-        const linkMatch = trimmedLine.match(/\[(.+?)\]\((.+?)\)/);
-        if (linkMatch) {
-          const title = linkMatch[1].trim();
-          const url = linkMatch[2].trim();
-          
-          try {
-            await chrome.bookmarks.create({
-              parentId: currentFolderId,
-              title: title,
-              url: url
-            });
-          } catch (error) {
-            console.error('创建书签失败:', error);
-          }
-        }
-      }
-    }
-    
-    showMessage('书签导入成功！');
-  } catch (error) {
-    throw new Error('Markdown导入失败: ' + error.message);
-  }
-}
-
-// 从HTML导入书签
-async function importBookmarksFromHTML(content, parentId) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(content, 'text/html');
-  
-  // 查找根DL元素
-  const rootDL = doc.querySelector('dl');
-  if (!rootDL) {
-    throw new Error('未找到有效的书签结构');
-  }
-  
-  // 获取浏览器的根书签文件夹
-  const bookmarkTree = await chrome.bookmarks.getTree();
-  const rootBookmarkFolder = bookmarkTree[0];
-  
-  // 获取书签栏和其他书签的ID
-  const bookmarkBarId = rootBookmarkFolder.children[0].id; // 通常是"1"
-  const otherBookmarksId = rootBookmarkFolder.children[1].id; // 通常是"2"
-  
-  // 查找HTML中的主要书签文件夹
-  const mainFolders = rootDL.querySelectorAll(':scope > dt > h3');
-  
-  // 遍历HTML中的主要文件夹，匹配到浏览器中对应的位置
-  for (const folderHeader of mainFolders) {
-    const folderName = folderHeader.textContent.trim();
-    const dtElement = folderHeader.closest('dt');
-    const dlElement = dtElement.querySelector(':scope > dl');
-    
-    if (!dlElement) continue;
-    
-    // 根据文件夹名称决定导入位置
-    let targetId;
-    
-    // 如果用户选择了特定文件夹，优先使用该文件夹
-    if (parentId && parentId !== 'all') {
-      targetId = parentId;
-    } 
-    // 否则根据文件夹名称匹配
-    else if (folderName.includes('书签栏') || 
-             folderName.includes('收藏夹栏') || 
-             folderName.includes('Bookmarks bar') || 
-             folderName.includes('Favorites Bar')) {
-      targetId = bookmarkBarId;
-    } else if (folderName.includes('其他书签') || 
-               folderName.includes('其他收藏夹') || 
-               folderName.includes('Other Bookmarks') || 
-               folderName.includes('Other Favorites')) {
-      targetId = otherBookmarksId;
-    } else {
-      // 如果没有匹配到特定名称，默认导入到书签栏
-      targetId = bookmarkBarId;
-    }
-    
-    // 直接导入文件夹内容，不创建额外的文件夹层级
-    await processHTMLBookmarks(dlElement, targetId);
-  }
-  
-  // 如果没有找到主要文件夹，则直接处理所有内容
-  if (mainFolders.length === 0) {
-    const targetId = (parentId && parentId !== 'all') ? parentId : bookmarkBarId;
-    await processHTMLBookmarks(rootDL, targetId);
-  }
-}
-
-// 递归处理HTML书签
-async function processHTMLBookmarks(container, parentId) {
-  // 处理所有DT元素
-  const dtElements = container.querySelectorAll(':scope > dt');
-  
-  for (const dt of dtElements) {
-    // 检查是否是文件夹
-    const h3 = dt.querySelector(':scope > h3');
-    if (h3) {
-      const folderTitle = h3.textContent.trim();
-      const dl = dt.querySelector(':scope > dl');
-      
-      if (dl) {
-        // 创建文件夹
-        try {
-          const newFolder = await chrome.bookmarks.create({
-            parentId: parentId,
-            title: folderTitle
-          });
-          
-          // 递归处理子文件夹内容
-          await processHTMLBookmarks(dl, newFolder.id);
-        } catch (error) {
-          console.error('创建文件夹失败:', error);
-        }
-      }
-    } else {
-      // 检查是否是书签
-      const a = dt.querySelector(':scope > a');
-      if (a) {
-        const url = a.getAttribute('href');
-        const title = a.textContent.trim();
-        
-        if (url && title) {
-          try {
-            await chrome.bookmarks.create({
-              parentId: parentId,
-              title: title,
-              url: url
-            });
-          } catch (error) {
-            console.error('创建书签失败:', error);
-          }
-        }
-      }
-    }
+    console.error('加载文件夹列表失败:', error);
+    showMessage('加载文件夹失败', true);
   }
 }
