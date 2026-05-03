@@ -9,9 +9,6 @@
     "storage",
     "windows"
   ],
-  "optional_permissions": [
-    "proxy"
-  ],
   "host_permissions": [
     "http://*/*",
     "https://*/*"

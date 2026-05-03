@@ -1,5 +1,8 @@
 import { logger } from './logger.js';
 
+const isServiceWorker = typeof window === 'undefined';
+const isExtensionPage = !isServiceWorker && typeof chrome !== 'undefined';
+
 class ErrorHandler {
   constructor() {
     this.isInitialized = false;
@@ -11,13 +14,23 @@ class ErrorHandler {
   init() {
     if (this.isInitialized) return;
 
-    window.addEventListener('error', (event) => {
-      this.handleWindowError(event);
-    });
+    if (isExtensionPage && typeof window !== 'undefined') {
+      window.addEventListener('error', (event) => {
+        this.handleWindowError(event);
+      });
 
-    window.addEventListener('unhandledrejection', (event) => {
-      this.handleUnhandledRejection(event);
-    });
+      window.addEventListener('unhandledrejection', (event) => {
+        this.handleUnhandledRejection(event);
+      });
+    } else if (isServiceWorker && typeof self !== 'undefined') {
+      self.addEventListener('error', (event) => {
+        this.handleServiceWorkerError(event);
+      });
+
+      self.addEventListener('unhandledrejection', (event) => {
+        this.handleUnhandledRejection(event);
+      });
+    }
 
     this.isInitialized = true;
     logger.info('Error handler initialized');
@@ -42,6 +55,21 @@ class ErrorHandler {
     }
   }
 
+  handleServiceWorkerError(event) {
+    const errorInfo = {
+      message: event.message || event.error?.message,
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+      stack: event.error?.stack
+    };
+
+    const errorKey = `sw:${event.filename}:${event.lineno}:${event.message}`;
+    this.incrementErrorCount(errorKey);
+
+    logger.error('Service Worker uncaught error:', errorInfo);
+  }
+
   handleUnhandledRejection(event) {
     const errorInfo = {
       reason: event.reason?.message || String(event.reason),
@@ -53,7 +81,7 @@ class ErrorHandler {
 
     logger.error('Unhandled promise rejection:', errorInfo);
 
-    if (this.shouldNotifyUser(errorKey)) {
+    if (isExtensionPage && this.shouldNotifyUser(errorKey)) {
       this.showUserNotification('异步操作失败', 'error');
     }
   }
@@ -114,19 +142,27 @@ class ErrorHandler {
   }
 
   showUserNotification(message, type = 'info') {
-    const notificationArea = document.querySelector('.notification-area');
-    const messageElement = document.getElementById('message');
-    
-    if (notificationArea && messageElement) {
-      messageElement.textContent = message;
-      messageElement.className = `message ${type === 'error' ? 'error' : 'success'}`;
-      notificationArea.style.display = 'block';
+    if (!isExtensionPage || typeof document === 'undefined') return;
 
-      setTimeout(() => {
-        notificationArea.style.display = 'none';
-        messageElement.textContent = '';
-        messageElement.className = 'message';
-      }, 5000);
+    try {
+      const notificationArea = document.querySelector('.notification-area');
+      const messageElement = document.getElementById('message');
+      
+      if (notificationArea && messageElement) {
+        messageElement.textContent = message;
+        messageElement.className = `message ${type === 'error' ? 'error' : 'success'}`;
+        notificationArea.style.display = 'block';
+
+        setTimeout(() => {
+          if (notificationArea && messageElement) {
+            notificationArea.style.display = 'none';
+            messageElement.textContent = '';
+            messageElement.className = 'message';
+          }
+        }, 5000);
+      }
+    } catch (e) {
+      logger.debug('Failed to show user notification:', e.message);
     }
   }
 
