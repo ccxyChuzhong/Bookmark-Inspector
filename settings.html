@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,8 +11,44 @@
   <div class="settings-wrapper">
     <header class="settings-header">
       <h1><i class="bi bi-gear"></i> 扩展设置</h1>
-      <span>Bookmark Inspector</span>
+      <button id="themeToggleBtn" class="theme-toggle" title="切换主题">
+        <i class="bi bi-moon"></i>
+      </button>
     </header>
+
+    <section class="settings-section">
+      <h2 class="section-title"><i class="bi bi-bar-chart"></i> 书签统计</h2>
+      <div class="stats-preview">
+        <div class="stat-preview-item">
+          <div class="stat-preview-value" id="statTotalBookmarks">-</div>
+          <div class="stat-preview-label">书签总数</div>
+        </div>
+        <div class="stat-preview-item">
+          <div class="stat-preview-value" id="statTotalFolders">-</div>
+          <div class="stat-preview-label">文件夹数</div>
+        </div>
+        <div class="stat-preview-item">
+          <div class="stat-preview-value" id="statLastCheck">-</div>
+          <div class="stat-preview-label">上次检测</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <h2 class="section-title"><i class="bi bi-lightning"></i> 快捷操作</h2>
+      <div class="quick-actions">
+        <button id="quickCheckBtn" class="quick-action-btn">
+          <i class="bi bi-check-circle"></i> 检测书签
+        </button>
+        <button id="quickDuplicatesBtn" class="quick-action-btn">
+          <i class="bi bi-files"></i> 查找重复
+        </button>
+        <button id="quickExportBtn" class="quick-action-btn success">
+          <i class="bi bi-download"></i> 导出书签
+        </button>
+        <button id="quickClearCacheBtn" class="quick-action-btn danger">
+          <i class="bi bi-trash"></i> 清除缓存
+        </button>
+      </div>
+    </section>
     <form id="settingsForm">
       <section class="settings-section">
         <h2 class="section-title">代理设置</h2>
