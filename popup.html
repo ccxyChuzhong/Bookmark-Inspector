@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +10,9 @@
 <body>
   <div class="container">
     <header class="header">
+      <button id="themeToggleBtn" class="theme-toggle-btn" title="切换主题">
+        <i class="bi bi-moon"></i>
+      </button>
       <h1><i class="bi bi-bookmark-star"></i> 书签管理器</h1>
       <button id="openSettingsBtn" class="settings-btn" title="打开设置">
         <i class="bi bi-gear"></i>
@@ -20,11 +23,11 @@
       <section class="action-panel">
         <div class="action-buttons">
           <div class="button-row">
-            <button id="exportBtn" class="btn primary-btn full-width">
+            <button id="exportBtn" class="btn primary-btn">
               <i class="bi bi-download"></i> 导出书签
             </button>
-            <button id="importBtn" class="btn primary-btn full-width">
-              <i class="bi bi-upload"></i> 选择文件导入
+            <button id="importBtn" class="btn primary-btn">
+              <i class="bi bi-upload"></i> 导入书签
             </button>
             <input type="file" id="importFile" accept=".json,.html,.csv,.md" class="hidden-input" aria-label="选择导入文件">
           </div>
@@ -34,8 +37,18 @@
 
           <select id="folderSelect" class="folder-select full-width" title="选择书签文件夹" aria-label="选择书签文件夹">
             <option value="all">全部文件夹</option>
-            <!-- 文件夹选项将通过JavaScript动态添加 -->
           </select>
+
+          <div class="divider"></div>
+
+          <div class="button-row">
+            <button id="findDuplicatesBtn" class="btn secondary-btn">
+              <i class="bi bi-files"></i> 查找重复
+            </button>
+            <button id="showStatsBtn" class="btn secondary-btn">
+              <i class="bi bi-bar-chart"></i> 统计分析
+            </button>
+          </div>
         </div>
       </section>
       
@@ -48,44 +61,148 @@
           <div class="progress-wrapper">
             <div id="progressBar" class="progress-bar"></div>
           </div>
-          <div id="progressText" class="progress-text">0%</div>
+          <div id="progressText" class="progress-text">
+            <i class="bi bi-arrow-repeat progress-icon"></i> 0%
+          </div>
+          <div class="progress-stats">
+            <span class="stat-item valid"><i class="bi bi-check-circle"></i> 有效: <span id="validCount">0</span></span>
+            <span class="stat-item invalid"><i class="bi bi-x-circle"></i> 失效: <span id="invalidCount">0</span></span>
+            <span class="stat-item pending"><i class="bi bi-hourglass"></i> 待检测: <span id="pendingCount">0</span></span>
+          </div>
         </div>
-        <div id="resultsContainer" class="results-container"></div>
+
+        <div id="batchActions" class="batch-actions hidden">
+          <span class="batch-info">
+            <i class="bi bi-check-square"></i> 已选择: <strong id="selectedCount">0</strong> 个书签
+          </span>
+          <button id="batchArchiveBtn" class="btn small-btn">
+            <i class="bi bi-archive"></i> 归档
+          </button>
+          <button id="batchCategorizeBtn" class="btn small-btn">
+            <i class="bi bi-folder2-open"></i> 分类
+          </button>
+          <button id="batchDeleteBtn" class="btn small-btn danger-btn">
+            <i class="bi bi-trash"></i> 删除
+          </button>
+          <button id="selectAllBtn" class="btn small-btn">
+            <i class="bi bi-check-all"></i> 全选
+          </button>
+        </div>
+
+        <div id="resultsContainer" class="results-container">
+          <div class="results-empty">
+            <i class="bi bi-bookmark-check"></i>
+            <div class="empty-title">暂无检测结果</div>
+            <div class="empty-subtitle">点击「检测网址可用性」开始检测</div>
+          </div>
+        </div>
       </section>
   
     </main>
 
     <footer class="footer">
       <div class="footer-content">
-        <small>书签管理器 v1.0</small>
+        <small>书签管理器 v3.0.0</small>
       </div>
     </footer>
   </div>
 
-  <!-- 导入设置模态对话框 -->
+  <div id="exportModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="bi bi-download"></i> 导出书签</h3>
+        <button id="closeExportModal" class="close-btn" type="button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section">
+          <label for="exportFormat">导出格式</label>
+          <select id="exportFormat" class="modal-select">
+            <option value="json">JSON 格式</option>
+            <option value="html">HTML 格式 (Netscape)</option>
+            <option value="csv">CSV 格式</option>
+            <option value="markdown">Markdown 格式</option>
+          </select>
+        </div>
+        <div class="modal-section">
+          <label for="exportFolder">导出文件夹</label>
+          <select id="exportFolder" class="modal-select">
+            <option value="all">全部书签</option>
+          </select>
+        </div>
+        <div class="modal-section">
+          <div class="checkbox-row">
+            <input type="checkbox" id="enableEncryption" class="modal-checkbox">
+            <label for="enableEncryption">加密导出文件</label>
+          </div>
+        </div>
+        <div id="encryptionFields" class="hidden">
+          <div class="modal-section">
+            <label for="encryptPassword">加密密码</label>
+            <div class="password-input-group">
+              <input type="password" id="encryptPassword" placeholder="请输入密码">
+              <button type="button" id="togglePasswordVisibility" class="password-toggle-btn">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+            <div class="help-text">密码至少 8 位，包含字母和数字</div>
+          </div>
+          <div class="modal-section">
+            <label for="confirmEncryptPassword">确认密码</label>
+            <input type="password" id="confirmEncryptPassword" class="modal-select" placeholder="请再次输入密码">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelExport" class="btn secondary-btn" type="button">
+          <i class="bi bi-x-circle"></i> 取消
+        </button>
+        <button id="confirmExport" class="btn primary-btn" type="button">
+          <i class="bi bi-download"></i> 确认导出
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div id="importModal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
-        <h3><i class="bi bi-upload"></i> 导入书签设置</h3>
-        <button id="closeModal" class="close-btn" type="button">&times;</button>
+        <h3><i class="bi bi-upload"></i> 导入书签</h3>
+        <button id="closeImportModal" class="close-btn" type="button">&times;</button>
       </div>
       <div class="modal-body">
-        <div class="setting-group">
-          <label for="importTargetFolder" class="setting-label">导入到文件夹：</label>
-          <select id="importTargetFolder" class="folder-select" title="选择导入目标文件夹" aria-label="选择导入目标文件夹">
+        <div class="file-drop-zone" id="importDropZone">
+          <i class="bi bi-cloud-upload"></i>
+          <div class="drop-text">拖放文件到此处，或点击选择文件</div>
+          <div class="drop-hint">支持 JSON、HTML、CSV、Markdown 格式</div>
+        </div>
+        <div class="divider"></div>
+        <div class="modal-section">
+          <label for="importTargetFolder">导入到文件夹</label>
+          <select id="importTargetFolder" class="modal-select">
             <option value="1">书签栏</option>
-            <!-- 文件夹选项将通过JavaScript动态添加 -->
           </select>
         </div>
-        <div class="setting-group">
-          <label for="importMode" class="setting-label">导入方式：</label>
-          <select id="importMode" class="import-mode-select" title="选择导入方式" aria-label="选择导入方式">
-            <option value="flatten">平铺模式（所有书签导入到根目录）</option>
+        <div class="modal-section">
+          <label for="importMode">导入方式</label>
+          <select id="importMode" class="modal-select">
             <option value="preserve">保持结构（保持原有文件夹结构）</option>
+            <option value="flatten">平铺模式（所有书签导入到根目录）</option>
           </select>
         </div>
         <div class="mode-description">
-          <p id="modeDescription">平铺模式：将JSON文件中的所有书签提取出来，全部导入到选中文件夹的根目录下，不保持原有的文件夹结构。</p>
+          <p id="importModeDescription">保持结构：完整保持导入文件中的原有文件夹层次结构，适合完整迁移书签。</p>
+        </div>
+        <div class="modal-section">
+          <div class="checkbox-row">
+            <input type="checkbox" id="isEncryptedFile" class="modal-checkbox">
+            <label for="isEncryptedFile">文件已加密</label>
+          </div>
+        </div>
+        <div id="decryptionFields" class="hidden">
+          <div class="modal-section">
+            <label for="decryptPassword">解密密码</label>
+            <input type="password" id="decryptPassword" class="modal-select" placeholder="请输入加密密码">
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -93,12 +210,145 @@
           <i class="bi bi-x-circle"></i> 取消
         </button>
         <button id="confirmImport" class="btn primary-btn" type="button">
-          <i class="bi bi-check-circle"></i> 选择文件
+          <i class="bi bi-check-circle"></i> 确认导入
         </button>
       </div>
     </div>
   </div>
 
-  <script src="./js/popup.js"></script>
+  <div id="statsModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="bi bi-bar-chart"></i> 书签统计分析</h3>
+        <button id="closeStatsModal" class="close-btn" type="button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="tab-container">
+          <button class="tab-btn active" data-tab="overview">概览</button>
+          <button class="tab-btn" data-tab="domains">域名分布</button>
+          <button class="tab-btn" data-tab="folders">文件夹</button>
+        </div>
+
+        <div id="tab-overview" class="tab-content active">
+          <div class="stats-preview">
+            <div class="stat-preview-item">
+              <div class="stat-preview-value primary" id="statTotalBookmarks">0</div>
+              <div class="stat-preview-label">书签总数</div>
+            </div>
+            <div class="stat-preview-item">
+              <div class="stat-preview-value" id="statTotalFolders">0</div>
+              <div class="stat-preview-label">文件夹数</div>
+            </div>
+            <div class="stat-preview-item">
+              <div class="stat-preview-value" id="statUniqueDomains">0</div>
+              <div class="stat-preview-label">独立域名</div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="stat-card">
+            <div class="stat-card-title">
+              <i class="bi bi-check-circle"></i> 上次检测状态
+            </div>
+            <div id="lastCheckStatus" class="stat-value">暂无检测记录</div>
+          </div>
+        </div>
+
+        <div id="tab-domains" class="tab-content">
+          <div id="domainsList"></div>
+        </div>
+
+        <div id="tab-folders" class="tab-content">
+          <div id="foldersList"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="closeStatsBtn" class="btn secondary-btn" type="button">
+          <i class="bi bi-x-circle"></i> 关闭
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="duplicatesModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="bi bi-files"></i> 重复书签</h3>
+        <button id="closeDuplicatesModal" class="close-btn" type="button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="duplicatesSummary" class="stat-card">
+          <div class="stat-card-title">
+            <i class="bi bi-exclamation-triangle"></i> 检测结果
+          </div>
+          <div class="stat-value" id="duplicatesCount">正在检测...</div>
+        </div>
+        <div id="duplicatesList"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="deduplicateBtn" class="btn primary-btn" type="button">
+          <i class="bi bi-check-all"></i> 一键去重
+        </button>
+        <button id="closeDuplicatesBtn" class="btn secondary-btn" type="button">
+          <i class="bi bi-x-circle"></i> 关闭
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="confirmTitle">确认操作</h3>
+        <button id="closeConfirmModal" class="close-btn" type="button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="confirm-dialog">
+          <i id="confirmIcon" class="bi bi-exclamation-triangle warning-icon"></i>
+          <div class="confirm-title" id="confirmMessageTitle">确认删除？</div>
+          <div class="confirm-message" id="confirmMessage">此操作不可撤销。</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelConfirm" class="btn secondary-btn" type="button">
+          <i class="bi bi-x-circle"></i> 取消
+        </button>
+        <button id="confirmAction" class="btn primary-btn" type="button">
+          <i class="bi bi-check-circle"></i> 确认
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="batchCategorizeModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="bi bi-folder2-open"></i> 批量分类</h3>
+        <button id="closeCategorizeModal" class="close-btn" type="button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section">
+          <label>选择目标文件夹</label>
+          <select id="categorizeTargetFolder" class="modal-select">
+            <option value="1">书签栏</option>
+          </select>
+        </div>
+        <div class="mode-description">
+          <p>将选中的书签移动到指定文件夹。</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelCategorize" class="btn secondary-btn" type="button">
+          <i class="bi bi-x-circle"></i> 取消
+        </button>
+        <button id="confirmCategorize" class="btn primary-btn" type="button">
+          <i class="bi bi-folder2-open"></i> 移动书签
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script type="module" src="./js/popup.js"></script>
 </body>
 </html>

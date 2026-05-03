@@ -1,14 +1,18 @@
 {
   "manifest_version": 3,
   "name": "书签管理器",
-  "version": "2.1.0",
-  "description": "一款支持导入导出和验证书签的工具",
+  "version": "3.0.0",
+  "description": "一款功能强大的书签管理工具，支持导入导出、失效检测、批量操作和数据分析",
   "permissions": [
     "bookmarks",
     "downloads",
     "storage",
     "windows",
-    "proxy"
+    "notifications"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
   ],
   "action": {
     "default_title": "书签管理器",
@@ -26,9 +30,31 @@
     "128": "images/icon128.png",
     "256": "images/icon256.png"
   },
+  "background": {
+    "service_worker": "js/background/background.js",
+    "type": "module"
+  },
   "options_page": "settings.html",
   "default_locale": "en",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self';"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' http: https:",
+    "sandbox": "sandbox allow-scripts allow-forms; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+  },
+  "minimum_chrome_version": "90",
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+B",
+        "mac": "Command+Shift+B"
+      },
+      "description": "打开书签管理器"
+    },
+    "check_bookmarks": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+C",
+        "mac": "Command+Shift+C"
+      },
+      "description": "检测书签可用性"
+    }
   }
 }
