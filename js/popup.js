@@ -21,15 +21,39 @@ const UIState = {
 const elements = {};
 
 async function init() {
-  await logger.init();
-  errorHandler.init();
-  logger.info('Bookmark Inspector initialized');
+  try {
+    await logger.init();
+    errorHandler.init();
+    logger.info('Bookmark Inspector initialized');
 
-  cacheElements();
-  await loadTheme();
-  await initFolderSelects();
-  setupEventListeners();
-  await loadSavedResults();
+    cacheElements();
+    
+    setupEventListeners();
+    
+    await loadTheme();
+    
+    try {
+      await initFolderSelects();
+    } catch (folderError) {
+      logger.error('Failed to initialize folder selects:', folderError);
+      showToast('加载文件夹列表失败: ' + folderError.message, 'error');
+    }
+    
+    try {
+      await loadSavedResults();
+    } catch (loadError) {
+      logger.error('Failed to load saved results:', loadError);
+    }
+    
+    logger.info('Initialization completed');
+  } catch (error) {
+    logger.error('Initialization failed:', error);
+    console.error('Popup initialization error:', error);
+    
+    if (typeof showToast === 'function') {
+      showToast('初始化失败: ' + error.message, 'error');
+    }
+  }
 }
 
 function cacheElements() {
@@ -89,63 +113,121 @@ function cacheElements() {
 }
 
 function setupEventListeners() {
-  elements.themeToggleBtn.addEventListener('click', toggleTheme);
-  elements.openSettingsBtn.addEventListener('click', openSettings);
+  try {
+    if (elements.themeToggleBtn) {
+      elements.themeToggleBtn.addEventListener('click', toggleTheme);
+    }
+    if (elements.openSettingsBtn) {
+      elements.openSettingsBtn.addEventListener('click', openSettings);
+    }
 
-  elements.exportBtn.addEventListener('click', showExportModal);
-  elements.importBtn.addEventListener('click', () => elements.importFile.click());
-  elements.importFile.addEventListener('change', handleFileSelect);
-  elements.checkUrlsBtn.addEventListener('click', toggleCheckUrls);
+    if (elements.exportBtn) {
+      elements.exportBtn.addEventListener('click', showExportModal);
+    }
+    if (elements.importBtn && elements.importFile) {
+      elements.importBtn.addEventListener('click', () => elements.importFile.click());
+    }
+    if (elements.importFile) {
+      elements.importFile.addEventListener('change', handleFileSelect);
+    }
+    if (elements.checkUrlsBtn) {
+      elements.checkUrlsBtn.addEventListener('click', toggleCheckUrls);
+    }
 
-  elements.folderSelect.addEventListener('change', clearResults);
+    if (elements.folderSelect) {
+      elements.folderSelect.addEventListener('change', clearResults);
+    }
 
-  elements.findDuplicatesBtn.addEventListener('click', showDuplicatesModal);
-  elements.showStatsBtn.addEventListener('click', showStatsModal);
+    if (elements.findDuplicatesBtn) {
+      elements.findDuplicatesBtn.addEventListener('click', showDuplicatesModal);
+    }
+    if (elements.showStatsBtn) {
+      elements.showStatsBtn.addEventListener('click', showStatsModal);
+    }
 
-  elements.batchArchiveBtn.addEventListener('click', batchArchive);
-  elements.batchCategorizeBtn.addEventListener('click', showCategorizeModal);
-  elements.batchDeleteBtn.addEventListener('click', batchDelete);
-  elements.selectAllBtn.addEventListener('click', toggleSelectAll);
+    if (elements.batchArchiveBtn) {
+      elements.batchArchiveBtn.addEventListener('click', batchArchive);
+    }
+    if (elements.batchCategorizeBtn) {
+      elements.batchCategorizeBtn.addEventListener('click', showCategorizeModal);
+    }
+    if (elements.batchDeleteBtn) {
+      elements.batchDeleteBtn.addEventListener('click', batchDelete);
+    }
+    if (elements.selectAllBtn) {
+      elements.selectAllBtn.addEventListener('click', toggleSelectAll);
+    }
 
-  document.querySelectorAll('.modal .close-btn, .modal #closeExportModal, .modal #closeImportModal, .modal #closeStatsModal, .modal #closeDuplicatesModal, .modal #closeConfirmModal, .modal #closeCategorizeModal').forEach(btn => {
-    if (btn) btn.addEventListener('click', (e) => {
-      const modal = e.target.closest('.modal');
-      if (modal) hideModal(modal);
+    document.querySelectorAll('.modal .close-btn, .modal #closeExportModal, .modal #closeImportModal, .modal #closeStatsModal, .modal #closeDuplicatesModal, .modal #closeConfirmModal, .modal #closeCategorizeModal').forEach(btn => {
+      if (btn) btn.addEventListener('click', (e) => {
+        const modal = e.target.closest('.modal');
+        if (modal) hideModal(modal);
+      });
     });
-  });
 
-  document.querySelectorAll('.modal #cancelExport, .modal #cancelImport, .modal #closeStatsBtn, .modal #closeDuplicatesBtn, .modal #cancelConfirm, .modal #cancelCategorize').forEach(btn => {
-    if (btn) btn.addEventListener('click', (e) => {
-      const modal = e.target.closest('.modal');
-      if (modal) hideModal(modal);
+    document.querySelectorAll('.modal #cancelExport, .modal #cancelImport, .modal #closeStatsBtn, .modal #closeDuplicatesBtn, .modal #cancelConfirm, .modal #cancelCategorize').forEach(btn => {
+      if (btn) btn.addEventListener('click', (e) => {
+        const modal = e.target.closest('.modal');
+        if (modal) hideModal(modal);
+      });
     });
-  });
 
-  elements.enableEncryption.addEventListener('change', toggleEncryptionFields);
-  elements.togglePasswordVisibility.addEventListener('click', togglePasswordShow);
-  document.getElementById('confirmExport').addEventListener('click', confirmExport);
+    if (elements.enableEncryption) {
+      elements.enableEncryption.addEventListener('change', toggleEncryptionFields);
+    }
+    if (elements.togglePasswordVisibility) {
+      elements.togglePasswordVisibility.addEventListener('click', togglePasswordShow);
+    }
+    const confirmExportBtn = document.getElementById('confirmExport');
+    if (confirmExportBtn) {
+      confirmExportBtn.addEventListener('click', confirmExport);
+    }
 
-  elements.importMode.addEventListener('change', updateImportModeDescription);
-  elements.isEncryptedFile.addEventListener('change', toggleDecryptionFields);
-  document.getElementById('confirmImport').addEventListener('click', confirmImport);
+    if (elements.importMode) {
+      elements.importMode.addEventListener('change', updateImportModeDescription);
+    }
+    if (elements.isEncryptedFile) {
+      elements.isEncryptedFile.addEventListener('change', toggleDecryptionFields);
+    }
+    const confirmImportBtn = document.getElementById('confirmImport');
+    if (confirmImportBtn) {
+      confirmImportBtn.addEventListener('click', confirmImport);
+    }
 
-  setupDragDrop();
+    setupDragDrop();
 
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', handleTabSwitch);
-  });
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      if (btn) btn.addEventListener('click', handleTabSwitch);
+    });
 
-  document.getElementById('deduplicateBtn').addEventListener('click', deduplicateAll);
-  document.getElementById('confirmAction').addEventListener('click', handleConfirmAction);
-  document.getElementById('confirmCategorize').addEventListener('click', confirmCategorize);
+    const deduplicateBtn = document.getElementById('deduplicateBtn');
+    if (deduplicateBtn) {
+      deduplicateBtn.addEventListener('click', deduplicateAll);
+    }
+    const confirmActionBtn = document.getElementById('confirmAction');
+    if (confirmActionBtn) {
+      confirmActionBtn.addEventListener('click', handleConfirmAction);
+    }
+    const confirmCategorizeBtn = document.getElementById('confirmCategorize');
+    if (confirmCategorizeBtn) {
+      confirmCategorizeBtn.addEventListener('click', confirmCategorize);
+    }
 
-  document.querySelectorAll('.modal').forEach(modal => {
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        hideModal(modal);
+    document.querySelectorAll('.modal').forEach(modal => {
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            hideModal(modal);
+          }
+        });
       }
     });
-  });
+
+    logger.info('Event listeners set up successfully');
+  } catch (error) {
+    logger.error('Failed to set up event listeners:', error);
+    console.error('Event listener setup error:', error);
+  }
 }
 
 function setupDragDrop() {

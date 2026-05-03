@@ -1,5 +1,5 @@
-import { cryptoUtils } from './cryptoUtils.js';
-import { logger } from './logger.js';
+import { cryptoUtils } from '../core/cryptoUtils.js';
+import { logger } from '../core/logger.js';
 
 const BookmarkFormat = {
   JSON: 'json',
