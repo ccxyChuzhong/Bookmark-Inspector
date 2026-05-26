@@ -65,7 +65,7 @@ body {
 
 /* Wrapper */
 .settings-wrapper {
-  max-width: 480px;
+  max-width: 420px;
   margin: 48px auto;
   background: var(--bg-surface);
   border-radius: var(--radius-lg);

@@ -883,7 +883,7 @@ function getAllBookmarkFolders(nodes, folders = [], depth = 0) {
   return folders;
 }
 
-// 创建树形下拉组件，替换原生select
+// 创建可折叠树形下拉组件
 function createTreeDropdown(selectEl, items, defaultLabel) {
   // 隐藏原生select
   selectEl.style.display = 'none';
@@ -892,8 +892,10 @@ function createTreeDropdown(selectEl, items, defaultLabel) {
   const wrap = selectEl.parentElement;
 
   // 移除已有的树形下拉（避免重复创建）
-  const existing = wrap.querySelector('.tree-dropdown');
+  const existing = wrap.querySelector('.tree-dropdown-trigger');
   if (existing) existing.remove();
+  const existingPanel = wrap.querySelector('.tree-dropdown-panel');
+  if (existingPanel) existingPanel.remove();
 
   // 创建触发器
   const trigger = document.createElement('div');
@@ -907,54 +909,194 @@ function createTreeDropdown(selectEl, items, defaultLabel) {
   const panel = document.createElement('div');
   panel.className = 'tree-dropdown-panel';
 
-  items.forEach((item, index) => {
-    const option = document.createElement('div');
-    option.className = 'tree-dropdown-option';
-    option.dataset.value = item.value;
+  // 构建层级关系：找出哪些文件夹有子文件夹
+  // 一个文件夹有子文件夹，当且仅当列表中下一个文件夹的 depth 比它大 1
+  const hasChildren = new Set();
+  for (let i = 0; i < items.length - 1; i++) {
+    if (items[i + 1].depth > items[i].depth) {
+      hasChildren.add(i);
+    }
+  }
 
-    if (item.depth === 0 && item.value === 'all') {
-      // "全部文件夹"特殊样式
-      option.innerHTML = `<span class="tree-label">${item.label}</span>`;
-    } else {
-      // 树形缩进
-      let indent = '';
-      for (let i = 0; i < item.depth; i++) {
-        indent += '<span class="tree-indent"></span>';
+  // 跟踪折叠状态
+  const collapsedGroups = new Set();
+  // 默认折叠所有有子项的组
+  hasChildren.forEach(idx => collapsedGroups.add(idx));
+
+  // 递归渲染：将 items 按层级构建为嵌套结构
+  function buildPanel() {
+    panel.innerHTML = '';
+    let i = 0;
+    renderLevel(panel, items, 0, items.length, 0);
+  }
+
+  function renderLevel(container, items, start, end, baseDepth) {
+    let i = start;
+    while (i < end) {
+      const item = items[i];
+      if (item.depth < baseDepth) break;
+
+      if (item.depth > baseDepth) {
+        // 跳过子项，它们会在父项的容器中渲染
+        i++;
+        continue;
       }
-      const isLast = index < items.length - 1 ? items[index + 1].depth < item.depth : true;
-      const branch = item.depth > 0 ? `<span class="tree-branch">${isLast && index === items.length - 1 ? '└' : '├'}</span>` : '';
-      option.innerHTML = `${indent}${branch}<span class="tree-label">${item.label}</span>`;
+
+      // 创建选项行
+      const option = document.createElement('div');
+      option.className = 'tree-dropdown-option';
+      option.dataset.value = item.value;
+      option.dataset.index = i;
+
+      // 缩进
+      let indentHtml = '';
+      for (let d = 0; d < item.depth; d++) {
+        indentHtml += '<span class="tree-indent"></span>';
+      }
+
+      // 是否有子项
+      const hasChild = hasChildren.has(i);
+
+      // 找到子项范围的结束位置
+      let childEnd = i + 1;
+      while (childEnd < end && items[childEnd].depth > item.depth) {
+        childEnd++;
+      }
+
+      if (hasChild) {
+        // 有子项：显示折叠箭头
+        const isCollapsed = collapsedGroups.has(i);
+        const toggleIcon = isCollapsed ? '▸' : '▾';
+        option.innerHTML = `${indentHtml}<span class="tree-toggle ${isCollapsed ? '' : 'expanded'}" data-group="${i}">${toggleIcon}</span><span class="tree-label">${item.label}</span>`;
+
+        // 点击箭头切换折叠
+        const toggle = option.querySelector('.tree-toggle');
+        toggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (collapsedGroups.has(i)) {
+            collapsedGroups.delete(i);
+          } else {
+            collapsedGroups.add(i);
+          }
+          buildPanel();
+        });
+
+        container.appendChild(option);
+
+        // 渲染子项容器
+        const childContainer = document.createElement('div');
+        childContainer.className = 'tree-group-children' + (isCollapsed ? ' collapsed' : '');
+        renderChildItems(childContainer, items, i + 1, childEnd, item.depth + 1);
+        container.appendChild(childContainer);
+      } else {
+        // 叶子节点：普通可选项
+        if (item.depth > 0) {
+          const isLast = (i >= end - 1) || (items[i + 1] && items[i + 1].depth < item.depth);
+          option.innerHTML = `${indentHtml}<span class="tree-branch">${'└'}</span><span class="tree-label">${item.label}</span>`;
+        } else {
+          option.innerHTML = `${indentHtml}<span class="tree-label">${item.label}</span>`;
+        }
+
+        // 选中状态
+        if (selectEl.value === item.value) {
+          option.classList.add('selected');
+          trigger.querySelector('.tree-dropdown-text').textContent = item.label;
+        }
+
+        option.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectEl.value = item.value;
+          selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+          trigger.querySelector('.tree-dropdown-text').textContent = item.label;
+          panel.querySelectorAll('.tree-dropdown-option').forEach(o => o.classList.remove('selected'));
+          option.classList.add('selected');
+          panel.classList.remove('open');
+          trigger.classList.remove('open');
+        });
+
+        container.appendChild(option);
+      }
+
+      i = childEnd;
     }
+  }
 
-    // 默认选中第一个
-    if (selectEl.value === item.value) {
-      option.classList.add('selected');
-      trigger.querySelector('.tree-dropdown-text').textContent = item.label;
+  function renderChildItems(container, items, start, end, targetDepth) {
+    for (let j = start; j < end; j++) {
+      const item = items[j];
+      if (item.depth !== targetDepth) continue;
+
+      const hasChild = hasChildren.has(j);
+      let childEnd = j + 1;
+      while (childEnd < end && items[childEnd].depth > item.depth) {
+        childEnd++;
+      }
+
+      const option = document.createElement('div');
+      option.className = 'tree-dropdown-option';
+      option.dataset.value = item.value;
+
+      let indentHtml = '';
+      for (let d = 0; d < item.depth; d++) {
+        indentHtml += '<span class="tree-indent"></span>';
+      }
+
+      const isLast = (j >= end - 1) || (items[j + 1] && items[j + 1].depth < item.depth);
+      const branchChar = isLast ? '└' : '├';
+
+      if (hasChild) {
+        const isCollapsed = collapsedGroups.has(j);
+        const toggleIcon = isCollapsed ? '▸' : '▾';
+        option.innerHTML = `${indentHtml}<span class="tree-toggle ${isCollapsed ? '' : 'expanded'}" data-group="${j}">${toggleIcon}</span><span class="tree-label">${item.label}</span>`;
+
+        const toggle = option.querySelector('.tree-toggle');
+        toggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (collapsedGroups.has(j)) {
+            collapsedGroups.delete(j);
+          } else {
+            collapsedGroups.add(j);
+          }
+          buildPanel();
+        });
+
+        container.appendChild(option);
+
+        const childContainer = document.createElement('div');
+        childContainer.className = 'tree-group-children' + (isCollapsed ? ' collapsed' : '');
+        renderChildItems(childContainer, items, j + 1, childEnd, item.depth + 1);
+        container.appendChild(childContainer);
+      } else {
+        option.innerHTML = `${indentHtml}<span class="tree-branch">${branchChar}</span><span class="tree-label">${item.label}</span>`;
+
+        if (selectEl.value === item.value) {
+          option.classList.add('selected');
+          trigger.querySelector('.tree-dropdown-text').textContent = item.label;
+        }
+
+        option.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectEl.value = item.value;
+          selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+          trigger.querySelector('.tree-dropdown-text').textContent = item.label;
+          panel.querySelectorAll('.tree-dropdown-option').forEach(o => o.classList.remove('selected'));
+          option.classList.add('selected');
+          panel.classList.remove('open');
+          trigger.classList.remove('open');
+        });
+
+        container.appendChild(option);
+      }
     }
+  }
 
-    option.addEventListener('click', (e) => {
-      e.stopPropagation();
-      // 更新原生select值
-      selectEl.value = item.value;
-      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-      // 更新触发器文本
-      trigger.querySelector('.tree-dropdown-text').textContent = item.label;
-      // 更新选中状态
-      panel.querySelectorAll('.tree-dropdown-option').forEach(o => o.classList.remove('selected'));
-      option.classList.add('selected');
-      // 关闭面板
-      panel.classList.remove('open');
-      trigger.classList.remove('open');
-    });
-
-    panel.appendChild(option);
-  });
+  // 初始渲染
+  buildPanel();
 
   // 点击触发器打开/关闭面板
   trigger.addEventListener('click', (e) => {
     e.stopPropagation();
     const isOpen = panel.classList.contains('open');
-    // 先关闭所有其他下拉
     document.querySelectorAll('.tree-dropdown-panel.open').forEach(p => {
       p.classList.remove('open');
       p.previousElementSibling?.classList.remove('open');
