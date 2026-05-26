@@ -4,23 +4,44 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>扩展设置</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Noto+Sans+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/bootstrap-icons.css">
   <link rel="stylesheet" href="./css/settings.css">
 </head>
 <body>
+  <!-- Grain texture overlay -->
+  <div class="grain-overlay" aria-hidden="true"></div>
+
   <div class="settings-wrapper">
     <header class="settings-header">
-      <h1><i class="bi bi-gear"></i> 扩展设置</h1>
-      <span>Bookmark Inspector</span>
+      <div class="settings-header-inner">
+        <div class="settings-header-brand">
+          <div class="settings-header-icon">
+            <i class="bi bi-bookmark-star-fill"></i>
+          </div>
+          <div>
+            <h1>扩展设置</h1>
+            <span class="settings-subtitle">Bookmark Inspector</span>
+          </div>
+        </div>
+      </div>
     </header>
     <form id="settingsForm">
       <section class="settings-section">
-        <h2 class="section-title">代理设置</h2>
+        <div class="section-header">
+          <div class="section-icon"><i class="bi bi-shield-lock"></i></div>
+          <h2 class="section-title">代理设置</h2>
+        </div>
         <div class="toggle-row">
-          <p>检测失败时启用代理重试</p>
-          <label>
+          <div class="toggle-info">
+            <span class="toggle-label">代理重试</span>
+            <span class="toggle-desc">检测失败时自动通过代理重试</span>
+          </div>
+          <label class="toggle-switch">
             <input type="checkbox" id="enableProxyRetry">
-            使用代理
+            <span class="toggle-track"></span>
           </label>
         </div>
         <div id="proxyFields" class="proxy-fields">
@@ -34,28 +55,34 @@
           </div>
           <div class="field-group">
             <label for="proxyType">类型</label>
-            <select id="proxyType">
-              <option value="http">HTTP</option>
-              <option value="https">HTTPS</option>
-              <option value="socks5">SOCKS5</option>
-            </select>
+            <div class="select-wrap">
+              <select id="proxyType">
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+                <option value="socks5">SOCKS5</option>
+              </select>
+              <i class="bi bi-chevron-down select-icon"></i>
+            </div>
           </div>
         </div>
-        <p class="warning-text">代理仅在直连失败后才会尝试，请确保地址和端口配置正确。</p>
+        <p class="hint-text"><i class="bi bi-info-circle"></i> 代理仅在直连失败后才会尝试</p>
       </section>
 
       <section class="settings-section">
-        <h2 class="section-title">多线程检测</h2>
-        <div class="field-group">
-          <label for="threadsPerBatch">并发检测数量</label>
-          <input type="number" id="threadsPerBatch" min="1" max="20" placeholder="每批检测数，例如 10">
+        <div class="section-header">
+          <div class="section-icon"><i class="bi bi-lightning-charge"></i></div>
+          <h2 class="section-title">并发检测</h2>
         </div>
-        <p class="warning-text">根据网络和机器性能建议设置在 5~15 之间。</p>
+        <div class="field-group">
+          <label for="threadsPerBatch">每批检测数量</label>
+          <input type="number" id="threadsPerBatch" min="1" max="20" placeholder="建议 5~15">
+        </div>
+        <p class="hint-text"><i class="bi bi-info-circle"></i> 根据网络和机器性能，建议设置在 5~15 之间</p>
       </section>
 
-      <section class="settings-section">
+      <section class="settings-section settings-actions">
         <button type="submit" class="primary-btn">
-          <i class="bi bi-check2-circle"></i> 保存设置
+          <i class="bi bi-check2"></i> 保存设置
         </button>
         <div id="settingsMessage" class="message"></div>
       </section>

@@ -1093,24 +1093,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 如果是在popup中运行，并且没有独立窗口，则添加"保持打开"按钮
   if (isPopup) {
-    // 添加"保持打开"按钮
-    const header = document.querySelector(".header");
-    if (header) {
+    const headerActions = document.querySelector(".header-actions");
+    if (headerActions) {
       const keepOpenBtn = document.createElement("button");
       keepOpenBtn.id = "keepOpenBtn";
-      keepOpenBtn.className = "btn small-btn";
-      keepOpenBtn.innerHTML = '<i class="bi bi-pin-angle"></i> 保持打开';
+      keepOpenBtn.className = "icon-action-btn";
+      keepOpenBtn.innerHTML = '<i class="bi bi-pin-angle"></i>';
       keepOpenBtn.title = "在独立窗口中打开";
-      keepOpenBtn.style.marginLeft = "auto";
-      keepOpenBtn.style.width = "100px";
-      // 将按钮添加到header
-      header.appendChild(keepOpenBtn);
+      headerActions.prepend(keepOpenBtn);
 
-      // 添加点击事件
       keepOpenBtn.addEventListener("click", function () {
-        // 打开独立窗口
         openDetachedWindow();
-        // 关闭当前popup
         window.close();
       });
     }
@@ -1118,18 +1111,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 如果是在独立窗口中运行，添加关闭按钮
   if (!isPopup) {
-    const header = document.querySelector(".header");
-    if (header) {
+    const headerActions = document.querySelector(".header-actions");
+    if (headerActions) {
       const closeBtn = document.createElement("button");
       closeBtn.id = "closeBtn";
-      closeBtn.className = "btn small-btn";
-      closeBtn.innerHTML = '<i class="bi bi-x-lg"></i> 关闭';
+      closeBtn.className = "icon-action-btn";
+      closeBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
       closeBtn.title = "关闭窗口";
 
-      // 将按钮添加到header
-      header.appendChild(closeBtn);
+      headerActions.prepend(closeBtn);
 
-      // 添加点击事件
       closeBtn.addEventListener("click", function () {
         window.close();
       });
@@ -1427,7 +1418,7 @@ async function checkAllBookmarkUrls() {
     const checkUrlsBtn = document.getElementById("checkUrlsBtn");
     if (checkUrlsBtn) {
       checkUrlsBtn.innerHTML =
-        '<i class="bi bi-check-circle"></i> 检测网址可用性';
+        '<i class="bi bi-radar"></i> 检测网址可用性';
     }
 
     // 重置检测状态
@@ -1466,7 +1457,7 @@ function resetCheckingStatus() {
   const checkUrlsBtn = document.getElementById("checkUrlsBtn");
   if (checkUrlsBtn) {
     checkUrlsBtn.innerHTML =
-      '<i class="bi bi-check-circle"></i> 检测网址可用性';
+      '<i class="bi bi-radar"></i> 检测网址可用性';
   }
 }
 
@@ -2208,7 +2199,7 @@ function finishChecking(wasCancelled = false) {
 
   const checkUrlsBtn = document.getElementById('checkUrlsBtn');
   if (checkUrlsBtn) {
-    checkUrlsBtn.innerHTML = '<i class="bi bi-check-circle"></i> 检测网址可用性';
+    checkUrlsBtn.innerHTML = '<i class="bi bi-radar"></i> 检测网址可用性';
     checkUrlsBtn.disabled = false;
     checkUrlsBtn.classList.remove('disabled-btn');
   }
@@ -2292,30 +2283,73 @@ window.addEventListener('beforeunload', () => {
 
 function addCustomStyles() {
   chrome.storage.sync.get(['themeColor'], (result) => {
-    const themeColor = result.themeColor || '#4285f4';
+    const themeColor = result.themeColor || '#c0614a';
     const styleElement = document.createElement('style');
     styleElement.textContent = `
       :root {
         --theme-color: ${themeColor};
-        --theme-color-light: ${themeColor}33;
+        --theme-color-light: ${themeColor}14;
+        --accent: ${themeColor};
+        --accent-soft: ${themeColor}14;
+        --accent-ring: ${themeColor}33;
       }
 
       .btn-primary, .badge-primary {
-        background-color: var(--theme-color) !important;
-        border-color: var(--theme-color) !important;
+        background-color: ${themeColor} !important;
+        border-color: ${themeColor} !important;
       }
 
       .text-primary {
-        color: var(--theme-color) !important;
+        color: ${themeColor} !important;
       }
 
       .btn-outline-primary {
-        color: var(--theme-color) !important;
-        border-color: var(--theme-color) !important;
+        color: ${themeColor} !important;
+        border-color: ${themeColor} !important;
       }
 
       .btn-outline-primary:hover {
-        background-color: var(--theme-color-light) !important;
+        background-color: ${themeColor}14 !important;
+      }
+
+      .header-icon {
+        background: ${themeColor} !important;
+      }
+
+      .primary-btn {
+        background: ${themeColor} !important;
+      }
+
+      .primary-btn:hover {
+        background: color-mix(in srgb, ${themeColor} 85%, #000) !important;
+      }
+
+      .section-icon {
+        background: ${themeColor}14 !important;
+        border-color: ${themeColor}1a !important;
+        color: ${themeColor} !important;
+      }
+
+      .mode-description {
+        background: ${themeColor}0d !important;
+        border-color: ${themeColor}1a !important;
+      }
+
+      .mode-description-icon {
+        color: ${themeColor} !important;
+      }
+
+      .folder-select-wrap::before,
+      .modal-select-wrap::before {
+        color: ${themeColor} !important;
+      }
+
+      .hint-text i {
+        color: ${themeColor} !important;
+      }
+
+      .modal-header h3 i {
+        color: ${themeColor} !important;
       }
     `;
 
@@ -2385,7 +2419,7 @@ async function showExportModal() {
             </select>
           </div>
           <div class="modal-buttons">
-            <button class="btn secondary-btn" id="modalCancelBtn">取消</button>
+            <button class="btn ghost-btn" id="modalCancelBtn">取消</button>
             <button class="btn primary-btn" id="modalExportBtn">导出</button>
           </div>
         </div>

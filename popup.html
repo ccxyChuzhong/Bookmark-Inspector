@@ -4,45 +4,62 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>书签管理器</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Noto+Sans+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/styles.css">
   <link rel="stylesheet" href="./css/bootstrap-icons.css">
 </head>
 <body>
+  <!-- Grain texture overlay -->
+  <div class="grain-overlay" aria-hidden="true"></div>
+
   <div class="container">
     <header class="header">
-      <h1><i class="bi bi-bookmark-star"></i> 书签管理器</h1>
-      <button id="openSettingsBtn" class="settings-btn" title="打开设置">
-        <i class="bi bi-gear"></i>
-      </button>
+      <div class="header-inner">
+        <div class="header-brand">
+          <div class="header-icon">
+            <i class="bi bi-bookmark-star-fill"></i>
+          </div>
+          <h1>书签管理器</h1>
+        </div>
+        <div class="header-actions">
+          <button id="openSettingsBtn" class="icon-action-btn" title="打开设置">
+            <i class="bi bi-sliders"></i>
+          </button>
+        </div>
+      </div>
     </header>
-    
+
     <main class="main-content">
       <section class="action-panel">
         <div class="action-buttons">
           <div class="button-row">
             <button id="exportBtn" class="btn primary-btn full-width">
-              <i class="bi bi-download"></i> 导出书签
+              <i class="bi bi-box-arrow-down"></i> 导出书签
             </button>
             <button id="importBtn" class="btn primary-btn full-width">
-              <i class="bi bi-upload"></i> 选择文件导入
+              <i class="bi bi-box-arrow-in-up"></i> 导入书签
             </button>
             <input type="file" id="importFile" accept=".json,.html,.csv,.md" class="hidden-input" aria-label="选择导入文件">
           </div>
-          <button id="checkUrlsBtn" class="btn secondary-btn full-width">
-            <i class="bi bi-check-circle"></i> 检测网址可用性
+          <button id="checkUrlsBtn" class="btn accent-btn full-width">
+            <i class="bi bi-radar"></i> 检测网址可用性
           </button>
 
-          <select id="folderSelect" class="folder-select full-width" title="选择书签文件夹" aria-label="选择书签文件夹">
-            <option value="all">全部文件夹</option>
-            <!-- 文件夹选项将通过JavaScript动态添加 -->
-          </select>
+          <div class="folder-select-wrap">
+            <select id="folderSelect" class="folder-select full-width" title="选择书签文件夹" aria-label="选择书签文件夹">
+              <option value="all">全部文件夹</option>
+            </select>
+            <i class="bi bi-chevron-down folder-select-icon"></i>
+          </div>
         </div>
       </section>
-      
+
       <section class="notification-area">
         <div id="message" class="message"></div>
       </section>
-      
+
       <section id="checkResults" class="check-results">
         <div id="progressContainer" class="progress-container hidden">
           <div class="progress-wrapper">
@@ -52,48 +69,57 @@
         </div>
         <div id="resultsContainer" class="results-container"></div>
       </section>
-  
+
     </main>
 
     <footer class="footer">
       <div class="footer-content">
-        <small>书签管理器 v1.0</small>
+        <span class="footer-brand">Bookmark Inspector</span>
+        <span class="footer-dot"></span>
+        <span class="footer-version">v2.1</span>
       </div>
     </footer>
   </div>
 
   <!-- 导入设置模态对话框 -->
   <div id="importModal" class="modal hidden">
+    <div class="modal-backdrop"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h3><i class="bi bi-upload"></i> 导入书签设置</h3>
-        <button id="closeModal" class="close-btn" type="button">&times;</button>
+        <h3><i class="bi bi-box-arrow-in-up"></i> 导入书签</h3>
+        <button id="closeModal" class="close-btn" type="button"><i class="bi bi-x-lg"></i></button>
       </div>
       <div class="modal-body">
         <div class="setting-group">
-          <label for="importTargetFolder" class="setting-label">导入到文件夹：</label>
-          <select id="importTargetFolder" class="folder-select" title="选择导入目标文件夹" aria-label="选择导入目标文件夹">
-            <option value="1">书签栏</option>
-            <!-- 文件夹选项将通过JavaScript动态添加 -->
-          </select>
+          <label for="importTargetFolder" class="setting-label">导入到文件夹</label>
+          <div class="modal-select-wrap">
+            <select id="importTargetFolder" class="folder-select" title="选择导入目标文件夹" aria-label="选择导入目标文件夹">
+              <option value="1">书签栏</option>
+            </select>
+            <i class="bi bi-chevron-down folder-select-icon"></i>
+          </div>
         </div>
         <div class="setting-group">
-          <label for="importMode" class="setting-label">导入方式：</label>
-          <select id="importMode" class="import-mode-select" title="选择导入方式" aria-label="选择导入方式">
-            <option value="flatten">平铺模式（所有书签导入到根目录）</option>
-            <option value="preserve">保持结构（保持原有文件夹结构）</option>
-          </select>
+          <label for="importMode" class="setting-label">导入方式</label>
+          <div class="modal-select-wrap">
+            <select id="importMode" class="import-mode-select" title="选择导入方式" aria-label="选择导入方式">
+              <option value="flatten">平铺模式 — 全部导入到根目录</option>
+              <option value="preserve">结构模式 — 保持原有文件夹层级</option>
+            </select>
+            <i class="bi bi-chevron-down folder-select-icon"></i>
+          </div>
         </div>
         <div class="mode-description">
+          <div class="mode-description-icon"><i class="bi bi-info-circle"></i></div>
           <p id="modeDescription">平铺模式：将JSON文件中的所有书签提取出来，全部导入到选中文件夹的根目录下，不保持原有的文件夹结构。</p>
         </div>
       </div>
       <div class="modal-footer">
-        <button id="cancelImport" class="btn secondary-btn" type="button">
-          <i class="bi bi-x-circle"></i> 取消
+        <button id="cancelImport" class="btn ghost-btn" type="button">
+          取消
         </button>
         <button id="confirmImport" class="btn primary-btn" type="button">
-          <i class="bi bi-check-circle"></i> 选择文件
+          <i class="bi bi-folder2-open"></i> 选择文件
         </button>
       </div>
     </div>
