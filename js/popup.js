@@ -864,23 +864,119 @@ function isNodeInFolder(node, folderId) {
   return false;
 }
 
-// 递归获取所有书签文件夹
-function getAllBookmarkFolders(nodes, folders = []) {
+// 递归获取所有书签文件夹（保留层级深度）
+function getAllBookmarkFolders(nodes, folders = [], depth = 0) {
   for (const node of nodes) {
     // 如果节点有子节点但没有URL，则认为是文件夹
     if (node.children && !node.url) {
       folders.push({
         id: node.id,
         title: node.title,
+        depth: depth,
       });
 
       // 递归处理子节点
-      getAllBookmarkFolders(node.children, folders);
+      getAllBookmarkFolders(node.children, folders, depth + 1);
     }
   }
 
   return folders;
 }
+
+// 创建树形下拉组件，替换原生select
+function createTreeDropdown(selectEl, items, defaultLabel) {
+  // 隐藏原生select
+  selectEl.style.display = 'none';
+
+  // 找到包裹容器
+  const wrap = selectEl.parentElement;
+
+  // 移除已有的树形下拉（避免重复创建）
+  const existing = wrap.querySelector('.tree-dropdown');
+  if (existing) existing.remove();
+
+  // 创建触发器
+  const trigger = document.createElement('div');
+  trigger.className = 'tree-dropdown-trigger';
+  trigger.innerHTML = `
+    <span class="tree-dropdown-text">${defaultLabel || items[0]?.label || '请选择'}</span>
+    <i class="bi bi-chevron-down tree-dropdown-arrow"></i>
+  `;
+
+  // 创建下拉面板
+  const panel = document.createElement('div');
+  panel.className = 'tree-dropdown-panel';
+
+  items.forEach((item, index) => {
+    const option = document.createElement('div');
+    option.className = 'tree-dropdown-option';
+    option.dataset.value = item.value;
+
+    if (item.depth === 0 && item.value === 'all') {
+      // "全部文件夹"特殊样式
+      option.innerHTML = `<span class="tree-label">${item.label}</span>`;
+    } else {
+      // 树形缩进
+      let indent = '';
+      for (let i = 0; i < item.depth; i++) {
+        indent += '<span class="tree-indent"></span>';
+      }
+      const isLast = index < items.length - 1 ? items[index + 1].depth < item.depth : true;
+      const branch = item.depth > 0 ? `<span class="tree-branch">${isLast && index === items.length - 1 ? '└' : '├'}</span>` : '';
+      option.innerHTML = `${indent}${branch}<span class="tree-label">${item.label}</span>`;
+    }
+
+    // 默认选中第一个
+    if (selectEl.value === item.value) {
+      option.classList.add('selected');
+      trigger.querySelector('.tree-dropdown-text').textContent = item.label;
+    }
+
+    option.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 更新原生select值
+      selectEl.value = item.value;
+      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      // 更新触发器文本
+      trigger.querySelector('.tree-dropdown-text').textContent = item.label;
+      // 更新选中状态
+      panel.querySelectorAll('.tree-dropdown-option').forEach(o => o.classList.remove('selected'));
+      option.classList.add('selected');
+      // 关闭面板
+      panel.classList.remove('open');
+      trigger.classList.remove('open');
+    });
+
+    panel.appendChild(option);
+  });
+
+  // 点击触发器打开/关闭面板
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = panel.classList.contains('open');
+    // 先关闭所有其他下拉
+    document.querySelectorAll('.tree-dropdown-panel.open').forEach(p => {
+      p.classList.remove('open');
+      p.previousElementSibling?.classList.remove('open');
+    });
+    if (!isOpen) {
+      panel.classList.add('open');
+      trigger.classList.add('open');
+    }
+  });
+
+  // 插入DOM
+  wrap.appendChild(trigger);
+  wrap.appendChild(panel);
+}
+
+// 点击页面其他区域关闭下拉
+document.addEventListener('click', () => {
+  document.querySelectorAll('.tree-dropdown-panel.open').forEach(p => {
+    p.classList.remove('open');
+    p.previousElementSibling?.classList.remove('open');
+  });
+});
 
 // 初始化文件夹选择下拉菜单
 async function initFolderSelect() {
@@ -888,7 +984,7 @@ async function initFolderSelect() {
     const folderSelect = document.getElementById("folderSelect");
     if (!folderSelect) return;
 
-    // 完全清空下拉菜单
+    // 清空原生select
     folderSelect.innerHTML = '';
 
     // 重新添加"全部文件夹"选项
@@ -900,22 +996,24 @@ async function initFolderSelect() {
     // 获取所有书签
     const bookmarks = await getAllBookmarks();
 
-    // 获取所有文件夹
+    // 获取所有文件夹（保留层级）
     const folders = getAllBookmarkFolders(bookmarks);
 
-    // 按文件夹名称排序
-    folders.sort((a, b) => a.title.localeCompare(b.title));
-
-    // 添加文件夹选项，确保每个文件夹都有标题
+    // 构建树形项目
+    const treeItems = [{ value: 'all', label: '全部文件夹', depth: 0 }];
     folders.forEach((folder) => {
-      // 跳过没有标题的文件夹
       if (!folder.title) return;
-
+      // 同步填充原生select（保留兼容）
       const option = document.createElement("option");
       option.value = folder.id;
       option.textContent = folder.title;
       folderSelect.appendChild(option);
+      // 添加到树形项目
+      treeItems.push({ value: folder.id, label: folder.title, depth: folder.depth });
     });
+
+    // 创建树形下拉
+    createTreeDropdown(folderSelect, treeItems, '全部文件夹');
   } catch (error) {
     console.error("初始化文件夹选择失败:", error);
     showMessage("加载文件夹失败", true);
@@ -928,7 +1026,7 @@ async function initImportTargetFolderSelect() {
     const importTargetFolder = document.getElementById("importTargetFolder");
     if (!importTargetFolder) return;
 
-    // 完全清空下拉菜单
+    // 清空原生select
     importTargetFolder.innerHTML = '';
 
     // 添加默认的书签栏选项
@@ -940,22 +1038,31 @@ async function initImportTargetFolderSelect() {
     // 获取所有书签
     const bookmarks = await getAllBookmarks();
 
-    // 获取所有文件夹
+    // 获取所有文件夹（保留层级）
     const folders = getAllBookmarkFolders(bookmarks);
 
-    // 按文件夹名称排序
-    folders.sort((a, b) => a.title.localeCompare(b.title));
-
-    // 添加文件夹选项，确保每个文件夹都有标题
+    // 构建树形项目
+    const treeItems = [];
     folders.forEach((folder) => {
-      // 跳过没有标题的文件夹和书签栏（已经添加过了）
-      if (!folder.title || folder.id === "1") return;
-
-      const option = document.createElement("option");
-      option.value = folder.id;
-      option.textContent = folder.title;
-      importTargetFolder.appendChild(option);
+      if (!folder.title) return;
+      // 同步填充原生select（保留兼容）
+      if (folder.id !== "1") {
+        const option = document.createElement("option");
+        option.value = folder.id;
+        option.textContent = folder.title;
+        importTargetFolder.appendChild(option);
+      }
+      // 添加到树形项目（跳过没有标题的文件夹和书签栏）
+      if (folder.id !== "1") {
+        treeItems.push({ value: folder.id, label: folder.title, depth: folder.depth });
+      }
     });
+
+    // 书签栏放最前面
+    treeItems.unshift({ value: '1', label: '书签栏', depth: 0 });
+
+    // 创建树形下拉
+    createTreeDropdown(importTargetFolder, treeItems, '书签栏');
   } catch (error) {
     console.error("初始化导入目标文件夹选择失败:", error);
     showMessage("加载导入目标文件夹失败", true);
@@ -2414,9 +2521,11 @@ async function showExportModal() {
           </div>
           <div class="modal-section">
             <label for="modalFolderSelect">选择文件夹：</label>
-            <select id="modalFolderSelect" class="modal-select">
-              <option value="all">全部文件夹</option>
-            </select>
+            <div class="modal-select-wrap">
+              <select id="modalFolderSelect" class="modal-select">
+                <option value="all">全部文件夹</option>
+              </select>
+            </div>
           </div>
           <div class="modal-buttons">
             <button class="btn ghost-btn" id="modalCancelBtn">取消</button>
@@ -2486,15 +2595,19 @@ async function showExportModal() {
   try {
     const bookmarks = await getAllBookmarks();
     const folders = getAllBookmarkFolders(bookmarks);
-    folders.sort((a, b) => a.title.localeCompare(b.title));
 
+    const treeItems = [{ value: 'all', label: '全部文件夹', depth: 0 }];
     folders.forEach(folder => {
       if (!folder.title) return;
       const option = document.createElement('option');
       option.value = folder.id;
       option.textContent = folder.title;
       modalFolderSelect.appendChild(option);
+      treeItems.push({ value: folder.id, label: folder.title, depth: folder.depth });
     });
+
+    // 创建树形下拉
+    createTreeDropdown(modalFolderSelect, treeItems, '全部文件夹');
   } catch (error) {
     console.error('加载文件夹列表失败:', error);
     showMessage('加载文件夹失败', true);
