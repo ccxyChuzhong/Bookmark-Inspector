@@ -77,7 +77,8 @@
 
 
 ## 🌰示例
-![image](https://github.com/user-attachments/assets/d79aa937-4499-440b-a64b-61c125d3631f)
-![image](https://github.com/user-attachments/assets/6ce757e4-7077-46d3-9128-0ae82bf0c68b)
-![image](https://github.com/user-attachments/assets/beccadad-c168-4efa-ac72-81f5f84eba8b)
-![image](https://github.com/user-attachments/assets/55c790da-c359-4be1-9730-583ef023c0e4)
+<img width="350" height="600" alt="ScreenShot_2026-05-27_144028_601" src="https://github.com/user-attachments/assets/8a880349-c580-439b-98ca-fa60f6635463" />
+<img width="350" height="600" alt="ScreenShot_2026-05-27_144159_431" src="https://github.com/user-attachments/assets/9f34426e-a246-4e6e-805e-05b3d92a5495" />
+<img width="350" height="600" alt="ScreenShot_2026-05-27_144115_567" src="https://github.com/user-attachments/assets/58d013e3-4ae0-4d9e-b149-926d0f52bd6c" />
+<img width="350" height="600" alt="ScreenShot_2026-05-27_144040_087" src="https://github.com/user-attachments/assets/cdaa5824-416a-40ed-a793-d435d7576a23" />
+<img width="462" height="879" alt="ScreenShot_2026-05-27_144220_160" src="https://github.com/user-attachments/assets/54a16ed8-3d59-4ced-ba74-0b752f164137" />
