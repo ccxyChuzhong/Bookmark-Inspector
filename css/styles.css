@@ -479,7 +479,7 @@ h1 {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   z-index: 100;
-  max-height: 240px;
+  max-height: 230px;
   overflow-y: auto;
   display: none;
   animation: dropdownOpen var(--duration-normal) var(--ease-out);
@@ -1343,15 +1343,15 @@ h1 {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
-  width: 90%;
-  max-width: 380px;
-  max-height: 90vh;
-  overflow: hidden;
+  width: 92%;
+  max-width: 320px;
+  max-height: 92vh;
+  overflow: visible;
   animation: modalSlideIn var(--duration-slow) var(--ease-spring);
 }
 
 .modal-overlay .modal-header {
-  padding: 16px 18px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-light);
   display: flex;
   justify-content: space-between;
@@ -1363,7 +1363,7 @@ h1 {
 .modal-overlay .modal-header h3 {
   margin: 0;
   font-family: Georgia, 'Noto Sans SC', serif;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 400;
   color: var(--text-primary);
   display: flex;
@@ -1375,14 +1375,14 @@ h1 {
   border: 1px solid transparent;
   cursor: pointer;
   color: var(--text-muted);
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
   transition: all var(--duration-fast) var(--ease-out);
-  font-size: 12px;
+  font-size: 11px;
   padding: 0;
 }
 
@@ -1392,11 +1392,20 @@ h1 {
 }
 
 .modal-overlay .modal-content {
-  padding: 18px;
+  padding: 12px 14px;
+  overflow: visible;
+  max-height: none;
+  max-width: none;
+  width: auto;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  animation: none;
 }
 
 .modal-section {
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .modal-section:last-child {
@@ -1405,20 +1414,20 @@ h1 {
 
 .modal-section label {
   display: block;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   letter-spacing: 0.2px;
 }
 
 .modal-select {
   width: 100%;
-  padding: 9px 12px;
+  padding: 7px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
-  font-size: 13px;
+  font-size: 12.5px;
   font-family: inherit;
   color: var(--text-primary);
   transition: all var(--duration-fast) var(--ease-out);
@@ -1442,13 +1451,13 @@ h1 {
 .modal-buttons {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 18px;
-  padding: 14px 18px;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px 14px;
   border-top: 1px solid var(--border-light);
   background: var(--bg-page);
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  margin: 0 -18px -18px -18px;
+  margin: 0 -14px -12px -14px;
 }
 
 /* ---- Invalid Bookmarks (legacy) ---- */

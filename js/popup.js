@@ -1209,6 +1209,27 @@ function createTreeDropdown(selectEl, items, defaultLabel) {
     var isOpen = panel.className.indexOf('open') > -1;
     closeAllDropdowns();
     if (!isOpen) {
+      // 动态计算面板位置与高度，避免被视口底部裁切
+      var rect = trigger.getBoundingClientRect();
+      var vh = window.innerHeight || document.documentElement.clientHeight;
+      var spaceBelow = vh - rect.bottom - 8;
+      var spaceAbove = rect.top - 8;
+      var DEFAULT_MAX = 230;
+      var MIN_VISIBLE = 80;
+
+      panel.style.top = '';
+      panel.style.bottom = '';
+      panel.style.maxHeight = '';
+
+      if (spaceBelow < MIN_VISIBLE && spaceAbove > spaceBelow) {
+        // 上方空间更大 → 向上展开
+        panel.style.top = 'auto';
+        panel.style.bottom = 'calc(100% + 4px)';
+        panel.style.maxHeight = Math.max(MIN_VISIBLE, Math.min(DEFAULT_MAX, spaceAbove)) + 'px';
+      } else {
+        panel.style.maxHeight = Math.max(MIN_VISIBLE, Math.min(DEFAULT_MAX, spaceBelow)) + 'px';
+      }
+
       panel.className += ' open';
       trigger.className += ' open';
     }
