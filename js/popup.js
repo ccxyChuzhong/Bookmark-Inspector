@@ -996,25 +996,55 @@ async function renderBookmarksList(folderId) {
 
     // 检测状态
     const result = bookmarkResultsById[item.id];
-    if (result && (result.status !== null || checkingStatus.isChecking)) {
+    if (item.url) {
       const status = document.createElement('span');
-      if (result.status === null) {
+      if (checkingStatus.isChecking && result && result.status === null) {
         status.className = 'bm-status checking';
         status.textContent = '检测中';
-      } else if (result.status) {
+      } else if (result && result.status === true) {
         status.className = 'bm-status available';
         status.textContent = '可用';
-      } else {
+      } else if (result && result.status === false) {
         status.className = 'bm-status unavailable';
         status.textContent = '失效';
+      } else {
+        status.className = 'bm-status unchecked';
+        status.textContent = '未检测';
       }
       el.appendChild(status);
-      if (result.checkedAt) {
+      if (result && result.checkedAt) {
         const time = document.createElement('span');
         time.className = 'bm-time';
         time.textContent = formatTimeAgo(result.checkedAt);
         el.appendChild(time);
       }
+    }
+
+    // 删除按钮（仅对书签项，文件夹项不显示）
+    if (item.url) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'bm-delete';
+      del.title = '删除书签';
+      del.setAttribute('aria-label', '删除书签');
+      del.innerHTML = '<i class="bi bi-trash3"></i>';
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`确定要删除"${item.title || '此书签'}"吗？`)) return;
+        try {
+          await chrome.bookmarks.remove(item.id);
+          delete bookmarkResultsById[item.id];
+          el.remove();
+          const countEl = listEl.querySelector('.bm-count');
+          if (countEl) {
+            const remaining = listEl.querySelectorAll('.bm-item').length;
+            countEl.textContent = `${remaining} 项`;
+          }
+        } catch (err) {
+          showMessage('删除失败: ' + err.message, true);
+        }
+      });
+      el.appendChild(del);
     }
 
     // 点击书签打开，点击文件夹展开
@@ -2986,26 +3016,55 @@ function renderBookmarksList(folderId) {
       el.appendChild(info);
 
       const result = bookmarkResultsById[item.id];
-      if (result && (result.status !== null || checkingStatus.isChecking)) {
+      if (item.url) {
         const status = document.createElement('span');
-        if (result.status === null) {
+        if (checkingStatus.isChecking && result && result.status === null) {
           status.className = 'bm-status checking';
           status.textContent = '检测中';
-        } else if (result.status) {
+        } else if (result && result.status === true) {
           status.className = 'bm-status available';
           status.textContent = '可用';
-        } else {
+        } else if (result && result.status === false) {
           status.className = 'bm-status unavailable';
           status.textContent = '失效';
+        } else {
+          status.className = 'bm-status unchecked';
+          status.textContent = '未检测';
         }
         el.appendChild(status);
 
-        if (result.checkedAt) {
+        if (result && result.checkedAt) {
           const time = document.createElement('span');
           time.className = 'bm-time';
           time.textContent = formatTimeAgo(result.checkedAt);
           el.appendChild(time);
         }
+      }
+
+      if (item.url) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'bm-delete';
+        del.title = '删除书签';
+        del.setAttribute('aria-label', '删除书签');
+        del.innerHTML = '<i class="bi bi-trash3"></i>';
+        del.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!confirm(`确定要删除"${item.title || '此书签'}"吗？`)) return;
+          try {
+            await chrome.bookmarks.remove(item.id);
+            delete bookmarkResultsById[item.id];
+            el.remove();
+            const countEl = listEl.querySelector('.bm-count');
+            if (countEl) {
+              const remaining = listEl.querySelectorAll('.bm-item').length;
+              countEl.textContent = `${remaining} 项`;
+            }
+          } catch (err) {
+            showMessage('删除失败: ' + err.message, true);
+          }
+        });
+        el.appendChild(del);
       }
 
       if (item.url) {

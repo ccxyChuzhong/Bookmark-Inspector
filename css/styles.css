@@ -784,6 +784,43 @@ h1 {
   color: var(--info);
 }
 
+.bm-status.unchecked {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+}
+
+.bm-delete {
+  flex-shrink: 0;
+  margin-left: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+.bm-item:hover .bm-delete,
+.bm-delete:focus-visible {
+  opacity: 0.7;
+}
+
+.bm-delete:hover {
+  opacity: 1;
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
 .bm-time {
   font-size: 10px;
   color: var(--text-muted);
