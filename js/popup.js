@@ -996,7 +996,7 @@ async function renderBookmarksList(folderId) {
 
     // 检测状态
     const result = bookmarkResultsById[item.id];
-    if (result) {
+    if (result && (result.status !== null || checkingStatus.isChecking)) {
       const status = document.createElement('span');
       if (result.status === null) {
         status.className = 'bm-status checking';
@@ -1061,7 +1061,7 @@ function updateSectionVisibility() {
   const hasResults = checkingStatus.results && checkingStatus.results.length > 0;
   const isChecking = checkingStatus.isChecking;
 
-  if (hasResults && !isChecking) {
+  if (isChecking || hasResults) {
     bmSection.classList.add('hidden-section');
     checkSection.classList.remove('hidden-section');
   } else {
@@ -2986,7 +2986,7 @@ function renderBookmarksList(folderId) {
       el.appendChild(info);
 
       const result = bookmarkResultsById[item.id];
-      if (result) {
+      if (result && (result.status !== null || checkingStatus.isChecking)) {
         const status = document.createElement('span');
         if (result.status === null) {
           status.className = 'bm-status checking';
