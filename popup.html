@@ -4,14 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>书签管理器</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Noto+Sans+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/styles.css">
   <link rel="stylesheet" href="./css/bootstrap-icons.css">
 </head>
 <body>
-  <!-- Grain texture overlay -->
   <div class="grain-overlay" aria-hidden="true"></div>
 
   <div class="container">
@@ -24,7 +20,7 @@
           <h1>书签管理器</h1>
         </div>
         <div class="header-actions">
-          <button id="openSettingsBtn" class="icon-action-btn" title="打开设置">
+          <button id="openSettingsBtn" class="icon-action-btn" title="打开设置" aria-label="打开设置">
             <i class="bi bi-sliders"></i>
           </button>
         </div>
@@ -35,15 +31,16 @@
       <section class="action-panel">
         <div class="action-buttons">
           <div class="button-row">
-            <button id="exportBtn" class="btn primary-btn full-width">
+            <button id="exportBtn" class="btn primary-btn full-width" type="button">
               <i class="bi bi-box-arrow-down"></i> 导出书签
             </button>
-            <button id="importBtn" class="btn primary-btn full-width">
+            <button id="importBtn" class="btn primary-btn full-width" type="button">
               <i class="bi bi-box-arrow-in-up"></i> 导入书签
             </button>
             <input type="file" id="importFile" accept=".json,.html,.csv,.md" class="hidden-input" aria-label="选择导入文件">
           </div>
-          <button id="checkUrlsBtn" class="btn accent-btn full-width">
+
+          <button id="checkUrlsBtn" class="btn accent-btn full-width" type="button">
             <i class="bi bi-radar"></i> 检测网址可用性
           </button>
 
@@ -51,7 +48,7 @@
             <select id="folderSelect" class="folder-select full-width" title="选择书签文件夹" aria-label="选择书签文件夹">
               <option value="all">全部文件夹</option>
             </select>
-            <i class="bi bi-chevron-down folder-select-icon"></i>
+            <i class="bi bi-chevron-down folder-select-icon" aria-hidden="true"></i>
           </div>
         </div>
       </section>
@@ -60,16 +57,19 @@
         <div id="message" class="message"></div>
       </section>
 
+      <section id="bookmarksSection" class="bookmarks-section">
+        <div id="bookmarksList" class="bookmarks-list"></div>
+      </section>
+
       <section id="checkResults" class="check-results">
         <div id="progressContainer" class="progress-container hidden">
           <div class="progress-wrapper">
             <div id="progressBar" class="progress-bar"></div>
           </div>
-          <div id="progressText" class="progress-text">0%</div>
+          <div id="progressText" class="progress-text">检测进度 0% (0/0)</div>
         </div>
         <div id="resultsContainer" class="results-container"></div>
       </section>
-
     </main>
 
     <footer class="footer">
@@ -81,13 +81,14 @@
     </footer>
   </div>
 
-  <!-- 导入设置模态对话框 -->
-  <div id="importModal" class="modal hidden">
+  <div id="importModal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop"></div>
     <div class="modal-content">
       <div class="modal-header">
         <h3><i class="bi bi-box-arrow-in-up"></i> 导入书签</h3>
-        <button id="closeModal" class="close-btn" type="button"><i class="bi bi-x-lg"></i></button>
+        <button id="closeModal" class="close-btn" type="button" aria-label="关闭">
+          <i class="bi bi-x-lg"></i>
+        </button>
       </div>
       <div class="modal-body">
         <div class="setting-group">
@@ -96,28 +97,26 @@
             <select id="importTargetFolder" class="folder-select" title="选择导入目标文件夹" aria-label="选择导入目标文件夹">
               <option value="1">书签栏</option>
             </select>
-            <i class="bi bi-chevron-down folder-select-icon"></i>
+            <i class="bi bi-chevron-down folder-select-icon" aria-hidden="true"></i>
           </div>
         </div>
         <div class="setting-group">
           <label for="importMode" class="setting-label">导入方式</label>
           <div class="modal-select-wrap">
             <select id="importMode" class="import-mode-select" title="选择导入方式" aria-label="选择导入方式">
-              <option value="flatten">平铺模式 — 全部导入到根目录</option>
-              <option value="preserve">结构模式 — 保持原有文件夹层级</option>
+              <option value="flatten">平铺模式 - 全部导入到根目录</option>
+              <option value="preserve">结构模式 - 保持原有文件夹层级</option>
             </select>
-            <i class="bi bi-chevron-down folder-select-icon"></i>
+            <i class="bi bi-chevron-down folder-select-icon" aria-hidden="true"></i>
           </div>
         </div>
         <div class="mode-description">
           <div class="mode-description-icon"><i class="bi bi-info-circle"></i></div>
-          <p id="modeDescription">平铺模式：将JSON文件中的所有书签提取出来，全部导入到选中文件夹的根目录下，不保持原有的文件夹结构。</p>
+          <p id="modeDescription">平铺模式：将文件中的所有书签提取出来，全部导入到所选文件夹的根目录，不保留原始文件夹结构。</p>
         </div>
       </div>
       <div class="modal-footer">
-        <button id="cancelImport" class="btn ghost-btn" type="button">
-          取消
-        </button>
+        <button id="cancelImport" class="btn ghost-btn" type="button">取消</button>
         <button id="confirmImport" class="btn primary-btn" type="button">
           <i class="bi bi-folder2-open"></i> 选择文件
         </button>
@@ -125,6 +124,7 @@
     </div>
   </div>
 
+  <script src="./js/webdav.js"></script>
   <script src="./js/popup.js"></script>
 </body>
 </html>

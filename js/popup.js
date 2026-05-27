@@ -10,6 +10,10 @@ let checkingStatus = {
   proxyApplied: false
 };
 
+// 按书签 ID 存储检测结果（节省存储空间）
+// 结构: { [bookmarkId]: { status: true/false/null, checkedAt: 'ISO string' } }
+let bookmarkResultsById = {};
+
 const DEFAULT_SETTINGS = {
   enableProxyRetry: false,
   proxyType: 'http',
@@ -507,6 +511,28 @@ function getAllBookmarks() {
   });
 }
 
+function getBookmarkSubTree(folderId) {
+  return new Promise((resolve, reject) => {
+    if (!chrome || !chrome.bookmarks) {
+      reject(new Error("浏览器书签API不可用"));
+      return;
+    }
+
+    try {
+      chrome.bookmarks.getSubTree(folderId, (nodes) => {
+        const runtimeError = chrome.runtime && chrome.runtime.lastError;
+        if (runtimeError) {
+          reject(new Error(runtimeError.message));
+          return;
+        }
+        resolve(nodes || []);
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 // 导出书签为HTML格式
 async function exportBookmarksAsHTML(selectedFolder = 'all') {
   try {
@@ -736,7 +762,7 @@ async function exportBookmarksAsJSON(selectedFolder = 'all') {
       }
     } else {
       // 获取选定文件夹中的书签
-      const folder = await chrome.bookmarks.getSubTree(selectedFolder);
+      const folder = await getBookmarkSubTree(selectedFolder);
       if (folder && folder.length > 0 && folder[0].children) {
         bookmarksToExport = folder[0].children;
       }
@@ -835,6 +861,7 @@ function getAllBookmarkUrls(nodes, urls = [], selectedFolder = "all") {
         continue;
       }
       urls.push({
+        id: node.id,
         title: node.title,
         url: node.url,
         parentId: node.parentId,
@@ -869,295 +896,351 @@ function getAllBookmarkFolders(nodes, folders = [], depth = 0) {
   for (const node of nodes) {
     // 如果节点有子节点但没有URL，则认为是文件夹
     if (node.children && !node.url) {
-      folders.push({
-        id: node.id,
-        title: node.title,
-        depth: depth,
-      });
+      const title = typeof node.title === 'string' ? node.title.trim() : '';
+      const nextDepth = title ? depth + 1 : depth;
 
-      // 递归处理子节点
-      getAllBookmarkFolders(node.children, folders, depth + 1);
+      if (title) {
+        folders.push({
+          id: node.id,
+          title: title,
+          depth: depth,
+        });
+      }
+
+      // 根节点这类空标题系统节点不显示，但继续递归其子节点
+      getAllBookmarkFolders(node.children, folders, nextDepth);
     }
   }
 
   return folders;
 }
 
-// 创建可折叠树形下拉组件
+// 渲染书签列表（按文件夹筛选）
+async function renderBookmarksList(folderId) {
+  const listEl = document.getElementById('bookmarksList');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  const bookmarks = await getAllBookmarks();
+  let items = [];
+
+  if (folderId === 'all') {
+    // 收集所有书签（不含文件夹节点）
+    function collectAll(nodes) {
+      for (const node of nodes) {
+        if (node.url) {
+          items.push({ id: node.id, title: node.title, url: node.url });
+        }
+        if (node.children) collectAll(node.children);
+      }
+    }
+    bookmarks[0].children.forEach(top => {
+      if (top.children) collectAll(top.children);
+    });
+  } else {
+    // 获取指定文件夹下的内容
+    const sub = await getBookmarkSubTree(folderId);
+    if (sub && sub[0] && sub[0].children) {
+      for (const child of sub[0].children) {
+        if (child.url) {
+          items.push({ id: child.id, title: child.title, url: child.url });
+        } else if (child.children) {
+          // 子文件夹：显示文件夹项，展开后可点
+          items.push({ id: child.id, title: child.title, isFolder: true, childCount: countBookmarks(child) });
+        }
+      }
+    }
+  }
+
+  if (items.length === 0) {
+    listEl.innerHTML = '<div class="results-empty">此文件夹下没有书签</div>';
+    return;
+  }
+
+  // 头部
+  const header = document.createElement('div');
+  header.className = 'bm-header';
+  const folderLabel = folderId === 'all' ? '全部书签' : (await getBookmarkSubTree(folderId))[0]?.title || '';
+  header.innerHTML = '<span>' + folderLabel + '</span><span class="bm-count">' + items.length + ' 项</span>';
+  listEl.appendChild(header);
+
+  // 书签项
+  items.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'bm-item';
+
+    const icon = document.createElement('div');
+    icon.className = 'bm-icon' + (item.isFolder ? ' folder-icon' : '');
+    icon.innerHTML = item.isFolder ? '<i class="bi bi-folder2"></i>' : '<i class="bi bi-globe2"></i>';
+
+    const info = document.createElement('div');
+    info.className = 'bm-info';
+    const title = document.createElement('div');
+    title.className = 'bm-title';
+    title.textContent = item.title || '无标题';
+    info.appendChild(title);
+    if (item.url) {
+      const url = document.createElement('div');
+      url.className = 'bm-url';
+      url.textContent = item.url;
+      info.appendChild(url);
+    } else if (item.isFolder) {
+      const sub = document.createElement('div');
+      sub.className = 'bm-url';
+      sub.textContent = item.childCount + ' 个书签';
+      info.appendChild(sub);
+    }
+
+    el.appendChild(icon);
+    el.appendChild(info);
+
+    // 检测状态
+    const result = bookmarkResultsById[item.id];
+    if (result) {
+      const status = document.createElement('span');
+      if (result.status === null) {
+        status.className = 'bm-status checking';
+        status.textContent = '检测中';
+      } else if (result.status) {
+        status.className = 'bm-status available';
+        status.textContent = '可用';
+      } else {
+        status.className = 'bm-status unavailable';
+        status.textContent = '失效';
+      }
+      el.appendChild(status);
+      if (result.checkedAt) {
+        const time = document.createElement('span');
+        time.className = 'bm-time';
+        time.textContent = formatTimeAgo(result.checkedAt);
+        el.appendChild(time);
+      }
+    }
+
+    // 点击书签打开，点击文件夹展开
+    if (item.url) {
+      el.addEventListener('click', () => chrome.tabs.create({ url: item.url }));
+    } else if (item.isFolder) {
+      el.addEventListener('click', () => {
+        // 选中该文件夹
+        const folderSelect = document.getElementById('folderSelect');
+        if (folderSelect) {
+          folderSelect.value = item.id;
+          folderSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    }
+
+    listEl.appendChild(el);
+  });
+}
+
+function countBookmarks(node) {
+  if (node.url) return 1;
+  if (!node.children) return 0;
+  return node.children.reduce((sum, c) => sum + countBookmarks(c), 0);
+}
+
+function formatTimeAgo(isoString) {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return '刚刚';
+  if (mins < 60) return `${mins}分钟前`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}小时前`;
+  const days = Math.floor(hours / 24);
+  return `${days}天前`;
+}
+
+// 切换书签列表和检测结果的显示
+function updateSectionVisibility() {
+  const bmSection = document.getElementById('bookmarksSection');
+  const checkSection = document.getElementById('checkResults');
+  if (!bmSection || !checkSection) return;
+
+  const hasResults = checkingStatus.results && checkingStatus.results.length > 0;
+  const isChecking = checkingStatus.isChecking;
+
+  if (hasResults && !isChecking) {
+    bmSection.classList.add('hidden-section');
+    checkSection.classList.remove('hidden-section');
+  } else {
+    bmSection.classList.remove('hidden-section');
+    checkSection.classList.add('hidden-section');
+  }
+}
+
+function showBookmarksSection() {
+  const bmSection = document.getElementById('bookmarksSection');
+  const checkSection = document.getElementById('checkResults');
+  if (!bmSection || !checkSection) return;
+
+  bmSection.classList.remove('hidden-section');
+  checkSection.classList.add('hidden-section');
+}
+
+// 创建下拉组件
 function createTreeDropdown(selectEl, items, defaultLabel) {
-  // 隐藏原生select
   selectEl.style.display = 'none';
 
-  // 找到包裹容器
-  const wrap = selectEl.parentElement;
+  var wrap = selectEl.parentElement;
+  if (getComputedStyle(wrap).position === 'static') {
+    wrap.style.position = 'relative';
+  }
 
-  // 移除已有的树形下拉（避免重复创建）
-  const existing = wrap.querySelector('.tree-dropdown-trigger');
-  if (existing) existing.remove();
-  const existingPanel = wrap.querySelector('.tree-dropdown-panel');
-  if (existingPanel) existingPanel.remove();
+  var oldEls = wrap.querySelectorAll('.tree-dropdown-trigger, .tree-dropdown-panel');
+  for (var r = 0; r < oldEls.length; r++) oldEls[r].remove();
 
-  // 创建触发器
-  const trigger = document.createElement('div');
+  var trigger = document.createElement('div');
   trigger.className = 'tree-dropdown-trigger';
-  trigger.innerHTML = `
-    <span class="tree-dropdown-text">${defaultLabel || items[0]?.label || '请选择'}</span>
-    <i class="bi bi-chevron-down tree-dropdown-arrow"></i>
-  `;
 
-  // 创建下拉面板
-  const panel = document.createElement('div');
+  var txt = document.createElement('span');
+  txt.className = 'tree-dropdown-text';
+  txt.textContent = defaultLabel || '请选择';
+  trigger.appendChild(txt);
+
+  var ico = document.createElement('i');
+  ico.className = 'bi bi-chevron-down tree-dropdown-arrow';
+  trigger.appendChild(ico);
+
+  var panel = document.createElement('div');
   panel.className = 'tree-dropdown-panel';
 
-  // 构建层级关系：找出哪些文件夹有子文件夹
-  // 一个文件夹有子文件夹，当且仅当列表中下一个文件夹的 depth 比它大 1
-  const hasChildren = new Set();
-  for (let i = 0; i < items.length - 1; i++) {
-    if (items[i + 1].depth > items[i].depth) {
-      hasChildren.add(i);
+  // ── 填充选项 ──
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var label = typeof it.label === 'string' ? it.label.trim() : '';
+    if (!label) continue;
+    var opt = document.createElement('div');
+    opt.className = 'tree-dropdown-option';
+
+    var pl = 12 + (it.depth || 0) * 20;
+    opt.style.paddingLeft = pl + 'px';
+
+    if (it.depth > 0) {
+      var br = document.createElement('span');
+      br.className = 'tree-branch';
+      br.textContent = '└ ';
+      opt.appendChild(br);
     }
-  }
 
-  // 跟踪折叠状态
-  const collapsedGroups = new Set();
-  // 默认折叠所有有子项的组
-  hasChildren.forEach(idx => collapsedGroups.add(idx));
+    var lb = document.createElement('span');
+    lb.className = 'tree-label';
+    lb.textContent = label;
+    opt.appendChild(lb);
 
-  // 递归渲染：将 items 按层级构建为嵌套结构
-  function buildPanel() {
-    panel.innerHTML = '';
-    let i = 0;
-    renderLevel(panel, items, 0, items.length, 0);
-  }
-
-  function renderLevel(container, items, start, end, baseDepth) {
-    let i = start;
-    while (i < end) {
-      const item = items[i];
-      if (item.depth < baseDepth) break;
-
-      if (item.depth > baseDepth) {
-        // 跳过子项，它们会在父项的容器中渲染
-        i++;
-        continue;
-      }
-
-      // 创建选项行
-      const option = document.createElement('div');
-      option.className = 'tree-dropdown-option';
-      option.dataset.value = item.value;
-      option.dataset.index = i;
-
-      // 缩进
-      let indentHtml = '';
-      for (let d = 0; d < item.depth; d++) {
-        indentHtml += '<span class="tree-indent"></span>';
-      }
-
-      // 是否有子项
-      const hasChild = hasChildren.has(i);
-
-      // 找到子项范围的结束位置
-      let childEnd = i + 1;
-      while (childEnd < end && items[childEnd].depth > item.depth) {
-        childEnd++;
-      }
-
-      if (hasChild) {
-        // 有子项：显示折叠箭头
-        const isCollapsed = collapsedGroups.has(i);
-        const toggleIcon = isCollapsed ? '▸' : '▾';
-        option.innerHTML = `${indentHtml}<span class="tree-toggle ${isCollapsed ? '' : 'expanded'}" data-group="${i}">${toggleIcon}</span><span class="tree-label">${item.label}</span>`;
-
-        // 点击箭头切换折叠
-        const toggle = option.querySelector('.tree-toggle');
-        toggle.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (collapsedGroups.has(i)) {
-            collapsedGroups.delete(i);
-          } else {
-            collapsedGroups.add(i);
-          }
-          buildPanel();
-        });
-
-        container.appendChild(option);
-
-        // 渲染子项容器
-        const childContainer = document.createElement('div');
-        childContainer.className = 'tree-group-children' + (isCollapsed ? ' collapsed' : '');
-        renderChildItems(childContainer, items, i + 1, childEnd, item.depth + 1);
-        container.appendChild(childContainer);
-      } else {
-        // 叶子节点：普通可选项
-        if (item.depth > 0) {
-          const isLast = (i >= end - 1) || (items[i + 1] && items[i + 1].depth < item.depth);
-          option.innerHTML = `${indentHtml}<span class="tree-branch">${'└'}</span><span class="tree-label">${item.label}</span>`;
-        } else {
-          option.innerHTML = `${indentHtml}<span class="tree-label">${item.label}</span>`;
-        }
-
-        // 选中状态
-        if (selectEl.value === item.value) {
-          option.classList.add('selected');
-          trigger.querySelector('.tree-dropdown-text').textContent = item.label;
-        }
-
-        option.addEventListener('click', (e) => {
-          e.stopPropagation();
-          selectEl.value = item.value;
-          selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-          trigger.querySelector('.tree-dropdown-text').textContent = item.label;
-          panel.querySelectorAll('.tree-dropdown-option').forEach(o => o.classList.remove('selected'));
-          option.classList.add('selected');
-          panel.classList.remove('open');
-          trigger.classList.remove('open');
-        });
-
-        container.appendChild(option);
-      }
-
-      i = childEnd;
+    if (String(selectEl.value) === String(it.value)) {
+      opt.className += ' selected';
+      txt.textContent = label;
     }
+
+    // ★ 直接绑定
+    opt._val = it.value;
+    opt._lbl = label;
+    opt.addEventListener('mousedown', onOptDown, false);
+    opt.addEventListener('click', onOptClick, false);
+
+    panel.appendChild(opt);
   }
 
-  function renderChildItems(container, items, start, end, targetDepth) {
-    for (let j = start; j < end; j++) {
-      const item = items[j];
-      if (item.depth !== targetDepth) continue;
-
-      const hasChild = hasChildren.has(j);
-      let childEnd = j + 1;
-      while (childEnd < end && items[childEnd].depth > item.depth) {
-        childEnd++;
-      }
-
-      const option = document.createElement('div');
-      option.className = 'tree-dropdown-option';
-      option.dataset.value = item.value;
-
-      let indentHtml = '';
-      for (let d = 0; d < item.depth; d++) {
-        indentHtml += '<span class="tree-indent"></span>';
-      }
-
-      const isLast = (j >= end - 1) || (items[j + 1] && items[j + 1].depth < item.depth);
-      const branchChar = isLast ? '└' : '├';
-
-      if (hasChild) {
-        const isCollapsed = collapsedGroups.has(j);
-        const toggleIcon = isCollapsed ? '▸' : '▾';
-        option.innerHTML = `${indentHtml}<span class="tree-toggle ${isCollapsed ? '' : 'expanded'}" data-group="${j}">${toggleIcon}</span><span class="tree-label">${item.label}</span>`;
-
-        const toggle = option.querySelector('.tree-toggle');
-        toggle.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (collapsedGroups.has(j)) {
-            collapsedGroups.delete(j);
-          } else {
-            collapsedGroups.add(j);
-          }
-          buildPanel();
-        });
-
-        container.appendChild(option);
-
-        const childContainer = document.createElement('div');
-        childContainer.className = 'tree-group-children' + (isCollapsed ? ' collapsed' : '');
-        renderChildItems(childContainer, items, j + 1, childEnd, item.depth + 1);
-        container.appendChild(childContainer);
-      } else {
-        option.innerHTML = `${indentHtml}<span class="tree-branch">${branchChar}</span><span class="tree-label">${item.label}</span>`;
-
-        if (selectEl.value === item.value) {
-          option.classList.add('selected');
-          trigger.querySelector('.tree-dropdown-text').textContent = item.label;
-        }
-
-        option.addEventListener('click', (e) => {
-          e.stopPropagation();
-          selectEl.value = item.value;
-          selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-          trigger.querySelector('.tree-dropdown-text').textContent = item.label;
-          panel.querySelectorAll('.tree-dropdown-option').forEach(o => o.classList.remove('selected'));
-          option.classList.add('selected');
-          panel.classList.remove('open');
-          trigger.classList.remove('open');
-        });
-
-        container.appendChild(option);
-      }
-    }
+  function onOptDown(e) {
+    e.preventDefault();
   }
 
-  // 初始渲染
-  buildPanel();
-
-  // 点击触发器打开/关闭面板
-  trigger.addEventListener('click', (e) => {
+  function onOptClick(e) {
     e.stopPropagation();
-    const isOpen = panel.classList.contains('open');
-    document.querySelectorAll('.tree-dropdown-panel.open').forEach(p => {
-      p.classList.remove('open');
-      p.previousElementSibling?.classList.remove('open');
-    });
-    if (!isOpen) {
-      panel.classList.add('open');
-      trigger.classList.add('open');
+    var node = e.currentTarget;
+    var v = node._val;
+    selectEl.value = v;
+    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+
+    panel.className = panel.className.replace(' open', '');
+    trigger.className = trigger.className.replace(' open', '');
+  }
+
+  function syncDropdownSelection(value) {
+    var selectedLabel = defaultLabel || '璇烽€夋嫨';
+    var all = panel.childNodes;
+    for (var k = 0; k < all.length; k++) {
+      if (all[k].nodeType !== 1) continue;
+
+      all[k].className = all[k].className.replace(' selected', '').replace('selected', '');
+      if (String(all[k]._val) === String(value)) {
+        all[k].className += ' selected';
+        selectedLabel = all[k]._lbl;
+      }
     }
+
+    txt.textContent = selectedLabel;
+  }
+
+  trigger.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var isOpen = panel.className.indexOf('open') > -1;
+    closeAllDropdowns();
+    if (!isOpen) {
+      panel.className += ' open';
+      trigger.className += ' open';
+    }
+  }, false);
+
+  selectEl.addEventListener('change', function() {
+    syncDropdownSelection(selectEl.value);
   });
 
-  // 插入DOM
+  syncDropdownSelection(selectEl.value);
+
   wrap.appendChild(trigger);
   wrap.appendChild(panel);
 }
 
+// 关闭所有下拉
+function closeAllDropdowns() {
+  var panels = document.querySelectorAll('.tree-dropdown-panel.open');
+  for (var i = 0; i < panels.length; i++) {
+    panels[i].classList.remove('open');
+    var prev = panels[i].previousElementSibling;
+    if (prev && prev.classList.contains('tree-dropdown-trigger')) {
+      prev.classList.remove('open');
+    }
+  }
+}
+
 // 点击页面其他区域关闭下拉
-document.addEventListener('click', () => {
-  document.querySelectorAll('.tree-dropdown-panel.open').forEach(p => {
-    p.classList.remove('open');
-    p.previousElementSibling?.classList.remove('open');
-  });
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.folder-select-wrap') && !e.target.closest('.modal-select-wrap')) {
+    closeAllDropdowns();
+  }
 });
 
 // 初始化文件夹选择下拉菜单
 async function initFolderSelect() {
   try {
     const folderSelect = document.getElementById("folderSelect");
-    if (!folderSelect) return;
 
-    // 清空原生select
     folderSelect.innerHTML = '';
-
-    // 重新添加"全部文件夹"选项
     const allFoldersOption = document.createElement("option");
     allFoldersOption.value = "all";
     allFoldersOption.textContent = "全部文件夹";
     folderSelect.appendChild(allFoldersOption);
 
-    // 获取所有书签
     const bookmarks = await getAllBookmarks();
 
-    // 获取所有文件夹（保留层级）
     const folders = getAllBookmarkFolders(bookmarks);
 
-    // 构建树形项目
     const treeItems = [{ value: 'all', label: '全部文件夹', depth: 0 }];
     folders.forEach((folder) => {
-      if (!folder.title) return;
-      // 同步填充原生select（保留兼容）
       const option = document.createElement("option");
       option.value = folder.id;
       option.textContent = folder.title;
       folderSelect.appendChild(option);
-      // 添加到树形项目
       treeItems.push({ value: folder.id, label: folder.title, depth: folder.depth });
     });
 
-    // 创建树形下拉
     createTreeDropdown(folderSelect, treeItems, '全部文件夹');
+
+    renderBookmarksList('all');
   } catch (error) {
-    console.error("初始化文件夹选择失败:", error);
     showMessage("加载文件夹失败", true);
   }
 }
@@ -1265,7 +1348,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 从存储中获取之前的检测结果
   try {
-    const data = await chrome.storage.local.get("bookmarkCheckResults");
+    const data = await chrome.storage.local.get(["bookmarkCheckResults", "bookmarkResultsById"]);
     if (data.bookmarkCheckResults) {
       checkingStatus = data.bookmarkCheckResults;
 
@@ -1281,6 +1364,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
     }
+    // 恢复按ID存储的检测结果
+    if (data.bookmarkResultsById) {
+      bookmarkResultsById = data.bookmarkResultsById;
+    }
+    updateSectionVisibility();
   } catch (error) {
     console.error("恢复检测结果时出错:", error);
   }
@@ -1299,7 +1387,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // 初始化文件夹选择下拉菜单
-  initFolderSelect();
+  await initFolderSelect();
+  updateSectionVisibility();
 
   // 初始化导入目标文件夹选择下拉菜单
   initImportTargetFolderSelect();
@@ -1307,7 +1396,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 文件夹选择变化事件监听
   if (folderSelect) {
     folderSelect.addEventListener("change", function () {
-      // 清空结果显示
+      const selectedFolder = this.value;
+      renderBookmarksList(selectedFolder);
+      if (!checkingStatus.isChecking) {
+        showBookmarksSection();
+      }
       const resultsContainer = document.getElementById("resultsContainer");
       if (resultsContainer) resultsContainer.innerHTML = "";
     });
@@ -1644,16 +1737,20 @@ async function checkAllBookmarkUrls() {
     // 初始化结果数组
     bookmarkUrls.forEach((bookmark) => {
       checkingStatus.results.push({
+        id: bookmark.id,
         title: bookmark.title,
         url: bookmark.url,
         status: null, // null表示正在检测
       });
+      // 同步初始化按ID存储的结果
+      bookmarkResultsById[bookmark.id] = { status: null, checkedAt: null };
     });
 
     // 保存初始状态到localStorage
     saveCheckingStatus();
 
-    // 显示初始结果
+    // 显示初始结果，切换到检测结果区域
+    updateSectionVisibility();
     updateCheckingResults();
 
     // 启动后台检测
@@ -1792,6 +1889,46 @@ function loadCheckingStatus() {
 }
 
 // 后台检测URL的可用性 - 优化版本，减少UI更新频率
+function applyCheckStatusUpdate(index, id, status) {
+  if (!checkingStatus.results[index]) return;
+
+  if (checkingStatus.results[index].status === null) {
+    checkingStatus.checkedCount++;
+  }
+
+  checkingStatus.results[index].status = status;
+
+  if (id) {
+    bookmarkResultsById[id] = {
+      status: status,
+      checkedAt: new Date().toISOString()
+    };
+  }
+}
+
+function scheduleCheckingUiUpdate(force = false) {
+  const flush = () => {
+    window.checkingUiUpdateTimer = null;
+    updateCheckingProgress();
+    saveCheckingStatus();
+  };
+
+  if (force) {
+    if (window.checkingUiUpdateTimer) {
+      clearTimeout(window.checkingUiUpdateTimer);
+      window.checkingUiUpdateTimer = null;
+    }
+    flush();
+    return;
+  }
+
+  if (window.checkingUiUpdateTimer) return;
+
+  window.checkingUiUpdateTimer = setTimeout(() => {
+    requestAnimationFrame(flush);
+  }, 80);
+}
+
 async function backgroundCheckUrls() {
   // 如果没有正在进行的检测，则返回
   if (!checkingStatus.isChecking) return;
@@ -1807,7 +1944,7 @@ async function backgroundCheckUrls() {
   const pendingUrls = [];
   checkingStatus.results.forEach((result, index) => {
     if (result.status === null) {
-      pendingUrls.push({ index, url: result.url });
+      pendingUrls.push({ index, id: result.id, url: result.url });
     }
   });
 
@@ -1842,10 +1979,10 @@ async function backgroundCheckUrls() {
       checkingStatus.checkedCount = checkingStatus.results.filter(r => r.status !== null).length;
       
       // 更新UI以反映重置的状态
-      updateCheckingProgress();
-      
+      scheduleCheckingUiUpdate(true);
+
       // 继续检测
-      setTimeout(backgroundCheckUrls, 100);
+      setTimeout(backgroundCheckUrls, 0);
       return;
     }
 
@@ -1857,8 +1994,6 @@ async function backgroundCheckUrls() {
   // 增加批量大小，减少批次数量和UI更新频率
   const batchSize = Math.max(1, checkingStatus.batchSize || getThreadBatchSize());
   const batch = pendingUrls.slice(0, batchSize);
-
-  // 收集所有状态更新，一次性应用
   const statusUpdates = [];
 
   // 检测批次中的URL
@@ -1871,15 +2006,13 @@ async function backgroundCheckUrls() {
     // 如果用户取消了检测，则不更新结果
     if (checkingStatus.shouldCancel) return;
 
-    // 收集状态更新，而不是立即应用
-    statusUpdates.push({
-      index: item.index,
-      status: isAvailable,
-    });
+    applyCheckStatusUpdate(item.index, item.id, isAvailable);
+    statusUpdates.push(item);
+    scheduleCheckingUiUpdate();
   });
 
   try {
-    await Promise.all(checkPromises);
+    await Promise.allSettled(checkPromises);
 
     // 再次检查是否已取消，避免不必要的状态更新
     if (checkingStatus.shouldCancel) {
@@ -1887,16 +2020,6 @@ async function backgroundCheckUrls() {
       finishChecking(true);
       return;
     }
-
-    // 一次性应用所有状态更新
-    // 确保只有首次更新状态时才增加计数，防止重复计算
-    statusUpdates.forEach((update) => {
-      // 只有当状态从null变为true或false时才增加计数
-      if (checkingStatus.results[update.index].status === null) {
-        checkingStatus.checkedCount++;
-      }
-      checkingStatus.results[update.index].status = update.status;
-    });
   } catch (error) {
     console.error("检测URL时出错:", error);
   }
@@ -1940,6 +2063,13 @@ async function backgroundCheckUrls() {
   }
 
   // 增加批次间隔时间，减轻浏览器渲染压力
+  if (pendingUrls.length <= batchSize) {
+    scheduleCheckingUiUpdate(true);
+  }
+
+  setTimeout(backgroundCheckUrls, 0);
+  return;
+
   if (!checkingStatus.shouldCancel) {
     // 统一使用较长的延迟，确保浏览器有足够时间完成渲染
     const delayTime = 300; // 增加延迟时间
@@ -1963,7 +2093,7 @@ function updateCheckingProgress() {
 
   if (progressBar) progressBar.style.width = `${checkingStatus.progress}%`;
   if (progressText)
-    progressText.textContent = `${checkingStatus.progress}% (${checkingStatus.checkedCount}/${checkingStatus.totalCount})`;
+    progressText.textContent = `检测进度 ${checkingStatus.progress}% (${checkingStatus.checkedCount}/${checkingStatus.totalCount})`;
 
   // 更新检测结果显示
   updateCheckingResults();
@@ -2454,6 +2584,10 @@ function finishChecking(wasCancelled = false) {
   }
 
   window.progressUpdateScheduled = false;
+  if (window.checkingUiUpdateTimer) {
+    clearTimeout(window.checkingUiUpdateTimer);
+    window.checkingUiUpdateTimer = null;
+  }
 
   if (wasCancelled) {
     showMessage('检测已取消');
@@ -2472,6 +2606,13 @@ function finishChecking(wasCancelled = false) {
   updateCheckingResults();
   saveCheckResults();
   saveCheckingStatus();
+  updateSectionVisibility();
+
+  // 刷新书签列表，显示最新的检测状态
+  const folderSelect = document.getElementById('folderSelect');
+  if (folderSelect) {
+    renderBookmarksList(folderSelect.value);
+  }
 }
 
 function displayResults() {
@@ -2505,7 +2646,8 @@ function saveCheckResults() {
   }
 
   const stateCopy = JSON.parse(JSON.stringify(checkingStatus));
-  chrome.storage.local.set({ bookmarkCheckResults: stateCopy });
+  const resultsById = JSON.parse(JSON.stringify(bookmarkResultsById));
+  chrome.storage.local.set({ bookmarkCheckResults: stateCopy, bookmarkResultsById: resultsById });
 }
 
 async function openDetachedWindow() {
@@ -2514,8 +2656,8 @@ async function openDetachedWindow() {
   const newWindow = await chrome.windows.create({
     url: chrome.runtime.getURL('popup.html?detached=true'),
     type: 'popup',
-    width: 450,
-    height: 600,
+    width: 360,
+    height: 680,
     left: (currentWindow.left || 0) + 50,
     top: (currentWindow.top || 0) + 50
   });
@@ -2749,6 +2891,1055 @@ async function showExportModal() {
     });
 
     // 创建树形下拉
+    createTreeDropdown(modalFolderSelect, treeItems, '全部文件夹');
+  } catch (error) {
+    console.error('加载文件夹列表失败:', error);
+    showMessage('加载文件夹失败', true);
+  }
+}
+
+function renderBookmarksList(folderId) {
+  return (async () => {
+    const listEl = document.getElementById('bookmarksList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const bookmarks = await getAllBookmarks();
+    const items = [];
+
+    if (folderId === 'all') {
+      const collectAll = (nodes) => {
+        for (const node of nodes) {
+          if (node.url) {
+            items.push({ id: node.id, title: node.title, url: node.url });
+          }
+          if (node.children) {
+            collectAll(node.children);
+          }
+        }
+      };
+
+      bookmarks[0]?.children?.forEach((top) => {
+        if (top.children) {
+          collectAll(top.children);
+        }
+      });
+    } else {
+      const subTree = await getBookmarkSubTree(folderId);
+      if (subTree?.[0]?.children) {
+        for (const child of subTree[0].children) {
+          if (child.url) {
+            items.push({ id: child.id, title: child.title, url: child.url });
+          } else if (child.children) {
+            items.push({
+              id: child.id,
+              title: child.title,
+              isFolder: true,
+              childCount: countBookmarks(child)
+            });
+          }
+        }
+      }
+    }
+
+    if (items.length === 0) {
+      listEl.innerHTML = '<div class="results-empty">此文件夹下没有书签</div>';
+      return;
+    }
+
+    const header = document.createElement('div');
+    header.className = 'bm-header';
+    const subTree = folderId === 'all' ? null : await getBookmarkSubTree(folderId);
+    const folderLabel = folderId === 'all' ? '全部书签' : subTree?.[0]?.title || '';
+    header.innerHTML = `<span>${folderLabel}</span><span class="bm-count">${items.length} 项</span>`;
+    listEl.appendChild(header);
+
+    items.forEach((item) => {
+      const el = document.createElement('div');
+      el.className = 'bm-item';
+
+      const icon = document.createElement('div');
+      icon.className = 'bm-icon' + (item.isFolder ? ' folder-icon' : '');
+      icon.innerHTML = item.isFolder ? '<i class="bi bi-folder2"></i>' : '<i class="bi bi-globe2"></i>';
+
+      const info = document.createElement('div');
+      info.className = 'bm-info';
+
+      const title = document.createElement('div');
+      title.className = 'bm-title';
+      title.textContent = item.title || '无标题';
+      info.appendChild(title);
+
+      if (item.url) {
+        const url = document.createElement('div');
+        url.className = 'bm-url';
+        url.textContent = item.url;
+        info.appendChild(url);
+      } else if (item.isFolder) {
+        const sub = document.createElement('div');
+        sub.className = 'bm-url';
+        sub.textContent = `${item.childCount} 个书签`;
+        info.appendChild(sub);
+      }
+
+      el.appendChild(icon);
+      el.appendChild(info);
+
+      const result = bookmarkResultsById[item.id];
+      if (result) {
+        const status = document.createElement('span');
+        if (result.status === null) {
+          status.className = 'bm-status checking';
+          status.textContent = '检测中';
+        } else if (result.status) {
+          status.className = 'bm-status available';
+          status.textContent = '可用';
+        } else {
+          status.className = 'bm-status unavailable';
+          status.textContent = '失效';
+        }
+        el.appendChild(status);
+
+        if (result.checkedAt) {
+          const time = document.createElement('span');
+          time.className = 'bm-time';
+          time.textContent = formatTimeAgo(result.checkedAt);
+          el.appendChild(time);
+        }
+      }
+
+      if (item.url) {
+        el.addEventListener('click', () => chrome.tabs.create({ url: item.url }));
+      } else if (item.isFolder) {
+        el.addEventListener('click', () => {
+          const folderSelect = document.getElementById('folderSelect');
+          if (!folderSelect) return;
+          folderSelect.value = item.id;
+          folderSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+
+      listEl.appendChild(el);
+    });
+  })();
+}
+
+function formatTimeAgo(isoString) {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return '刚刚';
+  if (mins < 60) return `${mins} 分钟前`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  const days = Math.floor(hours / 24);
+  return `${days} 天前`;
+}
+
+function createTreeDropdown(selectEl, items, defaultLabel) {
+  selectEl.style.display = 'none';
+
+  const wrap = selectEl.parentElement;
+  if (getComputedStyle(wrap).position === 'static') {
+    wrap.style.position = 'relative';
+  }
+
+  wrap.querySelectorAll('.tree-dropdown-trigger, .tree-dropdown-panel').forEach((el) => el.remove());
+
+  const trigger = document.createElement('div');
+  trigger.className = 'tree-dropdown-trigger';
+
+  const text = document.createElement('span');
+  text.className = 'tree-dropdown-text';
+  text.textContent = defaultLabel || '请选择';
+  trigger.appendChild(text);
+
+  const icon = document.createElement('i');
+  icon.className = 'bi bi-chevron-down tree-dropdown-arrow';
+  trigger.appendChild(icon);
+
+  const panel = document.createElement('div');
+  panel.className = 'tree-dropdown-panel';
+
+  items.forEach((item) => {
+    const label = typeof item.label === 'string' ? item.label.trim() : '';
+    if (!label) return;
+
+    const option = document.createElement('div');
+    option.className = 'tree-dropdown-option';
+    option.style.paddingLeft = `${12 + (item.depth || 0) * 20}px`;
+
+    if (item.depth > 0) {
+      const branch = document.createElement('span');
+      branch.className = 'tree-branch';
+      branch.textContent = '└';
+      option.appendChild(branch);
+    }
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'tree-label';
+    labelEl.textContent = label;
+    option.appendChild(labelEl);
+
+    if (String(selectEl.value) === String(item.value)) {
+      option.classList.add('selected');
+      text.textContent = label;
+    }
+
+    option.dataset.value = String(item.value);
+    option.dataset.label = label;
+    option.addEventListener('mousedown', (event) => event.preventDefault(), false);
+    option.addEventListener('click', (event) => {
+      event.stopPropagation();
+      selectEl.value = item.value;
+      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      panel.classList.remove('open');
+      trigger.classList.remove('open');
+    }, false);
+
+    panel.appendChild(option);
+  });
+
+  const syncDropdownSelection = (value) => {
+    let selectedLabel = defaultLabel || '请选择';
+    panel.querySelectorAll('.tree-dropdown-option').forEach((option) => {
+      option.classList.remove('selected');
+      if (option.dataset.value === String(value)) {
+        option.classList.add('selected');
+        selectedLabel = option.dataset.label || selectedLabel;
+      }
+    });
+    text.textContent = selectedLabel;
+  };
+
+  trigger.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = panel.classList.contains('open');
+    closeAllDropdowns();
+    if (!isOpen) {
+      panel.classList.add('open');
+      trigger.classList.add('open');
+    }
+  }, false);
+
+  selectEl.addEventListener('change', () => {
+    syncDropdownSelection(selectEl.value);
+  });
+
+  syncDropdownSelection(selectEl.value);
+  wrap.appendChild(trigger);
+  wrap.appendChild(panel);
+}
+
+async function initFolderSelect() {
+  try {
+    const folderSelect = document.getElementById('folderSelect');
+    if (!folderSelect) return;
+
+    folderSelect.innerHTML = '';
+    const allFoldersOption = document.createElement('option');
+    allFoldersOption.value = 'all';
+    allFoldersOption.textContent = '全部文件夹';
+    folderSelect.appendChild(allFoldersOption);
+
+    const bookmarks = await getAllBookmarks();
+    const folders = getAllBookmarkFolders(bookmarks);
+    const treeItems = [{ value: 'all', label: '全部文件夹', depth: 0 }];
+
+    folders.forEach((folder) => {
+      if (!folder.title) return;
+      const option = document.createElement('option');
+      option.value = folder.id;
+      option.textContent = folder.title;
+      folderSelect.appendChild(option);
+      treeItems.push({ value: folder.id, label: folder.title, depth: folder.depth });
+    });
+
+    createTreeDropdown(folderSelect, treeItems, '全部文件夹');
+    renderBookmarksList('all');
+  } catch (error) {
+    showMessage('加载文件夹失败', true);
+  }
+}
+
+async function initImportTargetFolderSelect() {
+  try {
+    const importTargetFolder = document.getElementById('importTargetFolder');
+    if (!importTargetFolder) return;
+
+    importTargetFolder.innerHTML = '';
+
+    const bookmarksBarOption = document.createElement('option');
+    bookmarksBarOption.value = '1';
+    bookmarksBarOption.textContent = '书签栏';
+    importTargetFolder.appendChild(bookmarksBarOption);
+
+    const bookmarks = await getAllBookmarks();
+    const folders = getAllBookmarkFolders(bookmarks);
+    const treeItems = [];
+
+    folders.forEach((folder) => {
+      if (!folder.title || folder.id === '1') return;
+      const option = document.createElement('option');
+      option.value = folder.id;
+      option.textContent = folder.title;
+      importTargetFolder.appendChild(option);
+      treeItems.push({ value: folder.id, label: folder.title, depth: folder.depth });
+    });
+
+    treeItems.unshift({ value: '1', label: '书签栏', depth: 0 });
+    createTreeDropdown(importTargetFolder, treeItems, '书签栏');
+  } catch (error) {
+    console.error('初始化导入目标文件夹失败:', error);
+    showMessage('加载导入目标文件夹失败', true);
+  }
+}
+
+function resetCheckingStatus() {
+  checkingStatus.isChecking = false;
+  checkingStatus.shouldCancel = false;
+  checkingStatus.progress = 0;
+  checkingStatus.checkedCount = 0;
+  checkingStatus.totalCount = 0;
+  checkingStatus.phase = 'direct';
+  checkingStatus.batchSize = getThreadBatchSize();
+  checkingStatus.proxyApplied = false;
+
+  const checkUrlsBtn = document.getElementById('checkUrlsBtn');
+  if (checkUrlsBtn) {
+    checkUrlsBtn.innerHTML = '<i class="bi bi-radar"></i> 检测网址可用性';
+  }
+}
+
+function restoreCheckingState() {
+  if (!checkingStatus.isChecking) {
+    localStorage.removeItem('bookmarkCheckingStatus');
+    return;
+  }
+
+  if (checkingStatus.shouldCancel) {
+    finishChecking(true);
+    return;
+  }
+
+  const progressContainer = document.getElementById('progressContainer');
+  const progressBar = document.getElementById('progressBar');
+  const progressText = document.getElementById('progressText');
+  const checkUrlsBtn = document.getElementById('checkUrlsBtn');
+  const resultsContainer = document.getElementById('resultsContainer');
+
+  if (progressContainer) {
+    progressContainer.style.display = 'block';
+  }
+  if (progressBar) {
+    progressBar.style.width = `${checkingStatus.progress}%`;
+  }
+  if (progressText) {
+    progressText.textContent = `检测进度 ${checkingStatus.progress}% (${checkingStatus.checkedCount}/${checkingStatus.totalCount})`;
+  }
+  if (checkUrlsBtn) {
+    checkUrlsBtn.innerHTML = '<i class="bi bi-x-circle"></i> 取消检测';
+    checkUrlsBtn.disabled = false;
+    checkUrlsBtn.classList.remove('disabled-btn');
+  }
+  if (resultsContainer) {
+    resultsContainer.innerHTML = '';
+    updateCheckingResults();
+  }
+}
+
+function loadCheckingStatus() {
+  const savedStatus = localStorage.getItem('bookmarkCheckingStatus');
+  if (!savedStatus) return;
+
+  try {
+    const parsedStatus = JSON.parse(savedStatus);
+    if (parsedStatus.shouldCancel || !parsedStatus.isChecking) {
+      localStorage.removeItem('bookmarkCheckingStatus');
+      return;
+    }
+
+    checkingStatus = {
+      ...checkingStatus,
+      ...parsedStatus
+    };
+
+    setTimeout(() => {
+      restoreCheckingState();
+    }, 100);
+  } catch (error) {
+    console.error('加载检测状态失败:', error);
+    localStorage.removeItem('bookmarkCheckingStatus');
+  }
+}
+
+function applyCheckStatusUpdate(index, id, status) {
+  if (!checkingStatus.results[index]) return;
+
+  if (checkingStatus.results[index].status === null) {
+    checkingStatus.checkedCount += 1;
+  }
+
+  checkingStatus.results[index].status = status;
+
+  if (id) {
+    bookmarkResultsById[id] = {
+      status,
+      checkedAt: new Date().toISOString()
+    };
+  }
+}
+
+function scheduleCheckingUiUpdate(force = false) {
+  const flush = () => {
+    window.checkingUiUpdateTimer = null;
+    updateCheckingProgress();
+    saveCheckingStatus();
+  };
+
+  if (force) {
+    if (window.checkingUiUpdateTimer) {
+      clearTimeout(window.checkingUiUpdateTimer);
+      window.checkingUiUpdateTimer = null;
+    }
+    flush();
+    return;
+  }
+
+  if (window.checkingUiUpdateTimer) return;
+
+  window.checkingUiUpdateTimer = setTimeout(() => {
+    requestAnimationFrame(flush);
+  }, 80);
+}
+
+async function backgroundCheckUrls() {
+  if (!checkingStatus.isChecking) return;
+
+  if (checkingStatus.shouldCancel) {
+    await clearProxyIfNeeded();
+    finishChecking(true);
+    return;
+  }
+
+  const pendingUrls = [];
+  checkingStatus.results.forEach((result, index) => {
+    if (result.status === null) {
+      pendingUrls.push({ index, id: result.id, url: result.url });
+    }
+  });
+
+  if (pendingUrls.length === 0) {
+    const useProxyRetry = extensionSettings.enableProxyRetry;
+    const hasFailures = checkingStatus.results.some((result) => result.status === false);
+
+    if (checkingStatus.phase === 'direct' && useProxyRetry && hasFailures) {
+      checkingStatus.phase = 'proxy';
+      showMessage('正在切换代理进行重试...');
+
+      const proxySet = await applyProxySettings();
+      if (!proxySet) {
+        showMessage('代理设置失败，结束检测', true);
+        await clearProxyIfNeeded();
+        finishChecking();
+        return;
+      }
+
+      checkingStatus.results.forEach((result) => {
+        if (result.status === false) {
+          result.status = null;
+          if (result.id) {
+            bookmarkResultsById[result.id] = {
+              status: null,
+              checkedAt: new Date().toISOString()
+            };
+          }
+        }
+      });
+
+      checkingStatus.checkedCount = checkingStatus.results.filter((result) => result.status !== null).length;
+      scheduleCheckingUiUpdate(true);
+      setTimeout(backgroundCheckUrls, 0);
+      return;
+    }
+
+    await clearProxyIfNeeded();
+    finishChecking();
+    return;
+  }
+
+  const batchSize = Math.max(1, checkingStatus.batchSize || getThreadBatchSize());
+  const batch = pendingUrls.slice(0, batchSize);
+
+  try {
+    await Promise.allSettled(batch.map(async (item) => {
+      if (checkingStatus.shouldCancel) return;
+      const isAvailable = await checkUrlAvailability(item.url);
+      if (checkingStatus.shouldCancel) return;
+      applyCheckStatusUpdate(item.index, item.id, isAvailable);
+    }));
+  } catch (error) {
+    console.error('检测 URL 时出错:', error);
+  }
+
+  if (checkingStatus.shouldCancel) {
+    await clearProxyIfNeeded();
+    finishChecking(true);
+    return;
+  }
+
+  scheduleCheckingUiUpdate(pendingUrls.length <= batchSize);
+  setTimeout(backgroundCheckUrls, 0);
+}
+
+function updateCheckingProgress() {
+  checkingStatus.progress = checkingStatus.totalCount === 0
+    ? 0
+    : Math.floor((checkingStatus.checkedCount / checkingStatus.totalCount) * 100);
+
+  const progressBar = document.getElementById('progressBar');
+  const progressText = document.getElementById('progressText');
+
+  if (progressBar) {
+    progressBar.style.width = `${checkingStatus.progress}%`;
+  }
+  if (progressText) {
+    progressText.textContent = `检测进度 ${checkingStatus.progress}% (${checkingStatus.checkedCount}/${checkingStatus.totalCount})`;
+  }
+
+  updateCheckingResults();
+}
+
+function updateCheckingResults() {
+  const resultsContainer = document.getElementById('resultsContainer');
+  if (!resultsContainer) return;
+
+  if (window.resultsUpdateScheduled) return;
+  window.resultsUpdateScheduled = true;
+
+  requestAnimationFrame(() => {
+    const invalidItems = checkingStatus.results
+      .map((result, index) => ({ result, index }))
+      .filter((item) => item.result.status === false);
+
+    if (invalidItems.length === 0) {
+      const emptyMessage = checkingStatus.isChecking
+        ? '正在检测，暂未发现失效书签'
+        : '没有发现失效书签';
+      resultsContainer.innerHTML = `<div class="results-empty">${emptyMessage}</div>`;
+      window.resultsUpdateScheduled = false;
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    invalidItems.forEach(({ result, index }) => {
+      fragment.appendChild(createUrlItem(result, index));
+    });
+
+    resultsContainer.innerHTML = '';
+    resultsContainer.appendChild(fragment);
+    window.resultsUpdateScheduled = false;
+  });
+}
+
+function removeResultFromChecks(result, urlItem) {
+  const resultIndex = checkingStatus.results.findIndex((item) => item.id === result.id || item.url === result.url);
+  if (resultIndex !== -1) {
+    checkingStatus.results.splice(resultIndex, 1);
+  }
+
+  checkingStatus.totalCount = checkingStatus.results.length;
+  checkingStatus.checkedCount = checkingStatus.results.filter((item) => item.status !== null).length;
+
+  if (result.id) {
+    delete bookmarkResultsById[result.id];
+  }
+
+  if (urlItem?.parentNode) {
+    urlItem.parentNode.removeChild(urlItem);
+  }
+
+  if (typeof updateCounters === 'function') {
+    updateCounters();
+  }
+
+  updateResultsUI();
+  saveCheckResults();
+
+  const folderSelect = document.getElementById('folderSelect');
+  if (folderSelect) {
+    renderBookmarksList(folderSelect.value);
+  }
+}
+
+function createUnavailableActionButtons(result, urlItem) {
+  const actionButtons = document.createElement('div');
+  actionButtons.className = 'url-actions';
+
+  const newTabButton = document.createElement('button');
+  newTabButton.className = 'action-btn new-tab-btn';
+  newTabButton.innerHTML = '<i class="bi bi-box-arrow-up-right"></i>';
+  newTabButton.title = '在新标签页中打开';
+  newTabButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    chrome.tabs.create({ url: result.url });
+  });
+
+  const popupButton = document.createElement('button');
+  popupButton.className = 'action-btn popup-btn';
+  popupButton.innerHTML = '<i class="bi bi-window"></i>';
+  popupButton.title = '在弹出窗口中打开';
+  popupButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    chrome.windows.create({
+      url: result.url,
+      type: 'popup',
+      width: 800,
+      height: 600
+    });
+  });
+
+  const copyButton = document.createElement('button');
+  copyButton.className = 'action-btn copy-btn';
+  copyButton.innerHTML = '<i class="bi bi-clipboard"></i>';
+  copyButton.title = '复制链接';
+  copyButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    navigator.clipboard.writeText(result.url)
+      .then(() => {
+        copyButton.innerHTML = '<i class="bi bi-check"></i>';
+        setTimeout(() => {
+          copyButton.innerHTML = '<i class="bi bi-clipboard"></i>';
+        }, 1500);
+        showMessage('链接已复制到剪贴板');
+      })
+      .catch((error) => {
+        console.error('复制失败:', error);
+        showMessage('复制失败', true);
+      });
+  });
+
+  const deleteButton = document.createElement('button');
+  deleteButton.className = 'action-btn delete-btn';
+  deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
+  deleteButton.title = '删除书签';
+  deleteButton.addEventListener('click', async (event) => {
+    event.stopPropagation();
+
+    const bookmarkTitle = result.title || '未命名';
+    if (!confirm(`确定要删除书签“${bookmarkTitle}”吗？`)) {
+      return;
+    }
+
+    try {
+      const bookmarkId = await findBookmarkIdByUrl(result.url);
+      if (!bookmarkId) {
+        showMessage('未找到对应的书签', true);
+        return;
+      }
+
+      await chrome.bookmarks.remove(bookmarkId);
+      removeResultFromChecks(result, urlItem);
+      showMessage('书签已删除');
+    } catch (error) {
+      console.error('删除书签时出错:', error);
+      showMessage('删除书签失败: ' + error.message, true);
+    }
+  });
+
+  actionButtons.appendChild(newTabButton);
+  actionButtons.appendChild(popupButton);
+  actionButtons.appendChild(copyButton);
+  actionButtons.appendChild(deleteButton);
+  return actionButtons;
+}
+
+function createUrlItem(result, index) {
+  const urlItem = document.createElement('div');
+  urlItem.className = 'url-item';
+  urlItem.setAttribute('data-index', index);
+  urlItem.setAttribute('data-url', result.url);
+
+  const urlTitle = document.createElement('div');
+  urlTitle.className = 'url-title';
+  urlTitle.textContent = result.title || '无标题';
+
+  const urlStatus = document.createElement('div');
+  const statusString = getStatusString(result.status);
+  urlStatus.className = 'url-status ' + getStatusClass(result.status);
+  urlStatus.setAttribute('data-status', statusString);
+  urlStatus.textContent = getStatusText(result.status);
+
+  urlItem.appendChild(urlTitle);
+  urlItem.appendChild(urlStatus);
+
+  if (result.status === false) {
+    urlItem.appendChild(createUnavailableActionButtons(result, urlItem));
+  }
+
+  return urlItem;
+}
+
+async function findBookmarkIdByUrl(url) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.bookmarks.search({ url }, (results) => {
+        resolve(results?.[0]?.id || null);
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+function updateUrlItemStatus(statusElement, status) {
+  const currentStatus = statusElement.getAttribute('data-status');
+  const nextStatus = getStatusString(status);
+  if (currentStatus === nextStatus) return;
+
+  requestAnimationFrame(() => {
+    statusElement.setAttribute('data-status', nextStatus);
+    statusElement.className = 'url-status ' + getStatusClass(status);
+    statusElement.textContent = getStatusText(status);
+
+    const urlItem = statusElement.closest('.url-item');
+    if (!urlItem) return;
+
+    const index = parseInt(urlItem.getAttribute('data-index'), 10);
+    const result = checkingStatus.results[index];
+    if (!result) return;
+
+    const existingActions = urlItem.querySelector('.url-actions');
+    if (status === false) {
+      if (!existingActions) {
+        urlItem.appendChild(createUnavailableActionButtons(result, urlItem));
+      }
+      return;
+    }
+
+    if (existingActions) {
+      existingActions.remove();
+    }
+  });
+}
+
+async function loadExtensionSettings() {
+  try {
+    const stored = await chrome.storage.local.get('extensionSettings');
+    const savedSettings = stored.extensionSettings || {};
+    extensionSettings = {
+      ...DEFAULT_SETTINGS,
+      ...savedSettings
+    };
+    extensionSettings.threadsPerBatch = getThreadBatchSize(extensionSettings.threadsPerBatch);
+  } catch (error) {
+    console.error('加载设置失败:', error);
+    extensionSettings = { ...DEFAULT_SETTINGS };
+  }
+}
+
+function getThreadBatchSize(value) {
+  const fallback = typeof value === 'undefined' ? extensionSettings.threadsPerBatch : value;
+  const parsed = parseInt(fallback, 10);
+  if (Number.isNaN(parsed)) {
+    return DEFAULT_SETTINGS.threadsPerBatch;
+  }
+  return Math.min(20, Math.max(1, parsed));
+}
+
+function openSettingsPage() {
+  if (chrome.runtime.openOptionsPage) {
+    chrome.runtime.openOptionsPage();
+    return;
+  }
+  if (chrome.tabs) {
+    chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
+  }
+}
+
+async function applyProxySettings() {
+  if (!extensionSettings.enableProxyRetry) {
+    return false;
+  }
+
+  const proxyAddress = (extensionSettings.proxyAddress || '').trim();
+  const proxyPort = parseInt(extensionSettings.proxyPort, 10);
+  const proxyType = extensionSettings.proxyType || 'http';
+
+  if (!proxyAddress || Number.isNaN(proxyPort)) {
+    console.warn('代理配置不完整，跳过代理重试');
+    return false;
+  }
+
+  const config = {
+    mode: 'fixed_servers',
+    rules: {
+      singleProxy: {
+        scheme: proxyType,
+        host: proxyAddress,
+        port: proxyPort
+      },
+      bypassList: ['localhost', '127.0.0.1']
+    }
+  };
+
+  return new Promise((resolve) => {
+    if (!chrome.proxy) {
+      console.error('没有代理权限');
+      resolve(false);
+      return;
+    }
+
+    chrome.proxy.settings.set({ value: config, scope: 'regular' }, () => {
+      checkingStatus.proxyApplied = true;
+      console.log('代理已设置', config);
+      resolve(true);
+    });
+  });
+}
+
+async function clearProxyIfNeeded() {
+  if (!checkingStatus.proxyApplied) return;
+  await clearProxy();
+  checkingStatus.proxyApplied = false;
+}
+
+function clearProxy() {
+  return new Promise((resolve) => {
+    if (!chrome.proxy) {
+      resolve(false);
+      return;
+    }
+
+    chrome.proxy.settings.clear({ scope: 'regular' }, () => {
+      console.log('代理已清除');
+      resolve(true);
+    });
+  });
+}
+
+function getStatusString(status) {
+  if (status === null) return 'checking';
+  return status ? 'available' : 'unavailable';
+}
+
+function getStatusClass(status) {
+  if (status === null) return 'checking';
+  return status ? 'available' : 'unavailable';
+}
+
+function getStatusText(status) {
+  if (status === null) return '检测中';
+  return status ? '可用' : '不可用';
+}
+
+function finishChecking(wasCancelled = false) {
+  clearProxyIfNeeded().catch((error) => {
+    console.warn('清除代理失败:', error);
+  });
+
+  checkingStatus.isChecking = false;
+  checkingStatus.shouldCancel = false;
+
+  const progressContainer = document.getElementById('progressContainer');
+  if (progressContainer) {
+    progressContainer.style.display = 'none';
+  }
+
+  const checkUrlsBtn = document.getElementById('checkUrlsBtn');
+  if (checkUrlsBtn) {
+    checkUrlsBtn.innerHTML = '<i class="bi bi-radar"></i> 检测网址可用性';
+    checkUrlsBtn.disabled = false;
+    checkUrlsBtn.classList.remove('disabled-btn');
+  }
+
+  window.progressUpdateScheduled = false;
+  if (window.checkingUiUpdateTimer) {
+    clearTimeout(window.checkingUiUpdateTimer);
+    window.checkingUiUpdateTimer = null;
+  }
+
+  if (wasCancelled) {
+    showMessage('检测已取消');
+    const resultsContainer = document.getElementById('resultsContainer');
+    if (resultsContainer) {
+      resultsContainer.innerHTML = '<div class="results-empty">检测已取消，没有可显示的结果</div>';
+    }
+  } else {
+    const invalidCount = checkingStatus.results.filter((result) => result.status === false).length;
+    const summary = invalidCount > 0
+      ? `检测完成：发现 ${invalidCount} 个失效书签`
+      : '检测完成，未发现失效书签';
+    showMessage(summary);
+  }
+
+  updateCheckingResults();
+  saveCheckResults();
+  saveCheckingStatus();
+  updateSectionVisibility();
+
+  const folderSelect = document.getElementById('folderSelect');
+  if (folderSelect) {
+    renderBookmarksList(folderSelect.value);
+  }
+}
+
+function displayResults() {
+  const resultsContainer = document.getElementById('resultsContainer');
+  if (!resultsContainer) return;
+
+  if (!checkingStatus.results || checkingStatus.results.length === 0) {
+    resultsContainer.innerHTML = '<div class="results-empty">暂无检测结果</div>';
+    return;
+  }
+
+  checkingStatus.totalCount = checkingStatus.results.length;
+  checkingStatus.checkedCount = checkingStatus.results.filter((result) => result.status !== null).length;
+  updateCheckingProgress();
+  updateCheckingResults();
+}
+
+function populateInvalidList() {
+  updateCheckingResults();
+}
+
+function updateResultsUI() {
+  updateCheckingResults();
+}
+
+function saveCheckResults() {
+  if (!checkingStatus.results || checkingStatus.results.length === 0) {
+    chrome.storage.local.remove(['bookmarkCheckResults', 'bookmarkResultsById']);
+    return;
+  }
+
+  const stateCopy = JSON.parse(JSON.stringify(checkingStatus));
+  const resultsById = JSON.parse(JSON.stringify(bookmarkResultsById));
+  chrome.storage.local.set({
+    bookmarkCheckResults: stateCopy,
+    bookmarkResultsById: resultsById
+  });
+}
+
+function updateModeDescription() {
+  const importMode = document.getElementById('importMode');
+  const modeDescription = document.getElementById('modeDescription');
+  if (!importMode || !modeDescription) return;
+
+  const descriptions = {
+    flatten: '平铺模式：将文件中的所有书签提取出来，全部导入到所选文件夹的根目录，不保留原始文件夹结构。',
+    preserve: '结构模式：按照原始文件夹层级导入，在目标文件夹下重建目录结构。'
+  };
+
+  modeDescription.textContent = descriptions[importMode.value] || descriptions.flatten;
+}
+
+async function showExportModal() {
+  const existingModal = document.getElementById('exportModal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  const modalHTML = `
+    <div class="modal-overlay" id="exportModal">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h3>导出书签</h3>
+          <button class="modal-close-btn" id="modalCloseBtn" type="button" aria-label="关闭">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="modal-content">
+          <div class="modal-section">
+            <label for="modalExportFormat">导出格式：</label>
+            <select id="modalExportFormat" class="modal-select">
+              <option value="json">JSON 格式</option>
+              <option value="html">HTML 格式</option>
+              <option value="csv">CSV 格式</option>
+              <option value="markdown">Markdown 格式</option>
+            </select>
+          </div>
+          <div class="modal-section">
+            <label for="modalFolderSelect">选择文件夹：</label>
+            <div class="modal-select-wrap">
+              <select id="modalFolderSelect" class="modal-select">
+                <option value="all">全部文件夹</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-buttons">
+            <button class="btn ghost-btn" id="modalCancelBtn" type="button">取消</button>
+            <button class="btn primary-btn" id="modalExportBtn" type="button">导出</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+  const exportModal = document.getElementById('exportModal');
+  const modalCloseBtn = document.getElementById('modalCloseBtn');
+  const modalCancelBtn = document.getElementById('modalCancelBtn');
+  const modalExportBtn = document.getElementById('modalExportBtn');
+  const modalFolderSelect = document.getElementById('modalFolderSelect');
+  const modalExportFormat = document.getElementById('modalExportFormat');
+
+  if (!exportModal || !modalFolderSelect || !modalExportFormat || !modalExportBtn) {
+    console.error('导出弹窗初始化失败');
+    return;
+  }
+
+  const closeModal = () => {
+    if (exportModal.parentNode) {
+      exportModal.parentNode.removeChild(exportModal);
+    }
+  };
+
+  modalCloseBtn?.addEventListener('click', closeModal);
+  modalCancelBtn?.addEventListener('click', closeModal);
+
+  modalExportBtn.addEventListener('click', async () => {
+    const format = modalExportFormat.value;
+    const selectedFolder = modalFolderSelect.value;
+    closeModal();
+
+    try {
+      switch (format) {
+        case 'json':
+          await exportBookmarksAsJSON(selectedFolder);
+          break;
+        case 'html':
+          await exportBookmarksAsHTML(selectedFolder);
+          break;
+        case 'csv':
+          await exportBookmarksAsCSV(selectedFolder);
+          break;
+        case 'markdown':
+          await exportBookmarksAsMarkdown(selectedFolder);
+          break;
+        default:
+          showMessage('不支持的导出格式', true);
+      }
+    } catch (error) {
+      console.error('导出失败:', error);
+      showMessage('导出失败: ' + error.message, true);
+    }
+  });
+
+  try {
+    const bookmarks = await getAllBookmarks();
+    const folders = getAllBookmarkFolders(bookmarks);
+    const treeItems = [{ value: 'all', label: '全部文件夹', depth: 0 }];
+
+    folders.forEach((folder) => {
+      if (!folder.title) return;
+      const option = document.createElement('option');
+      option.value = folder.id;
+      option.textContent = folder.title;
+      modalFolderSelect.appendChild(option);
+      treeItems.push({ value: folder.id, label: folder.title, depth: folder.depth });
+    });
+
     createTreeDropdown(modalFolderSelect, treeItems, '全部文件夹');
   } catch (error) {
     console.error('加载文件夹列表失败:', error);

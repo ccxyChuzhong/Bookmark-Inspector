@@ -2,13 +2,16 @@
   "manifest_version": 3,
   "name": "书签管理器",
   "version": "2.1.0",
-  "description": "一款支持导入导出和验证书签的工具",
+  "description": "一款支持导入导出和检测书签的工具",
   "permissions": [
     "bookmarks",
     "downloads",
     "storage",
     "windows",
     "proxy"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "action": {
     "default_title": "书签管理器",
@@ -29,6 +32,6 @@
   "options_page": "settings.html",
   "default_locale": "en",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self';"
+    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https: http:;"
   }
 }

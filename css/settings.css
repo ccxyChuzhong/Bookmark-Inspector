@@ -108,7 +108,7 @@ body {
 
 .settings-header h1 {
   margin: 0;
-  font-family: 'DM Serif Display', 'Noto Sans SC', serif;
+  font-family: Georgia, 'Noto Sans SC', serif;
   font-size: 17px;
   font-weight: 400;
   color: var(--text-primary);
@@ -258,7 +258,8 @@ body {
 
 .field-group input,
 .field-group select {
-  padding: 9px 12px;
+  height: 38px;
+  padding: 0 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--bg-elevated);
@@ -267,6 +268,72 @@ body {
   color: var(--text-primary);
   transition: all var(--duration-fast) var(--ease-out);
   box-shadow: var(--shadow-xs);
+  box-sizing: border-box;
+}
+
+.field-group select {
+  display: block;
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 30px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239b9189' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.proxy-type-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.proxy-type-option {
+  position: relative;
+  cursor: pointer;
+}
+
+.proxy-type-option input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.proxy-type-option span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  transition: all var(--duration-fast) var(--ease-out);
+  box-shadow: var(--shadow-xs);
+  user-select: none;
+}
+
+.proxy-type-option:hover span {
+  border-color: rgba(192, 97, 74, 0.35);
+  color: var(--text-primary);
+}
+
+.proxy-type-option input:checked + span {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.proxy-type-option input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .field-group input::placeholder {
@@ -281,33 +348,20 @@ body {
   box-shadow: var(--shadow-focus);
 }
 
-.select-wrap {
-  position: relative;
-}
-
-.select-wrap select {
-  width: 100%;
-  appearance: none;
-  -webkit-appearance: none;
-  padding-right: 30px;
-  cursor: pointer;
-}
-
-.select-icon {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-muted);
-  font-size: 11px;
-  pointer-events: none;
-}
-
 /* Proxy fields grid */
 .proxy-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 5fr 3fr;
   gap: 10px;
+  align-items: start;
+}
+
+.proxy-fields .field-group {
+  margin-bottom: 0;
+}
+
+.proxy-type-field {
+  grid-column: 1 / -1;
 }
 
 /* Hint text */
@@ -405,4 +459,108 @@ body {
 
 button:focus:not(:focus-visible) {
   outline: none;
+}
+
+/* WebDAV auth fields side-by-side */
+.webdav-auth-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: end;
+}
+
+.webdav-auth-fields .field-group {
+  margin-bottom: 0;
+}
+
+.webdav-auth-fields input {
+  width: 100%;
+}
+
+.sync-info-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-xs);
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sync-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sync-info-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.sync-info-value {
+  font-size: 12px;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+/* WebDAV action row */
+.webdav-actions {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.ghost-btn {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.ghost-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+#webdavTestResult {
+  margin-top: 12px;
+}
+
+@media (max-width: 560px) {
+  .proxy-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .proxy-type-group {
+    grid-template-columns: 1fr;
+  }
+
+  .webdav-auth-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .sync-info-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .sync-info-value {
+    text-align: left;
+  }
 }

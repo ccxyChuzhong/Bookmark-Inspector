@@ -147,7 +147,7 @@ body {
 }
 
 h1 {
-  font-family: 'DM Serif Display', 'Noto Sans SC', serif;
+  font-family: Georgia, 'Noto Sans SC', serif;
   font-size: 16px;
   font-weight: 400;
   letter-spacing: 0.3px;
@@ -302,6 +302,14 @@ h1 {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+
+/* ---- WebDAV Row ---- */
+
+.webdav-row .btn {
+  font-size: 12px;
+}
+
+/* ---- Full Width ---- */
 
 .full-width {
   width: 100% !important;
@@ -654,12 +662,157 @@ h1 {
   display: block;
 }
 
+/* ---- Bookmarks Section ---- */
+
+.bookmarks-section {
+  margin-bottom: 8px;
+}
+
+.bookmarks-section.hidden-section {
+  display: none;
+}
+
+.check-results.hidden-section {
+  display: none;
+}
+
+.bookmarks-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.bookmarks-list:empty {
+  display: none;
+}
+
+.bookmarks-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.bookmarks-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bookmarks-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.bm-item {
+  display: flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.bm-item:last-child {
+  border-bottom: none;
+}
+
+.bm-item:hover {
+  background: var(--bg-hover);
+}
+
+.bm-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  margin-right: 10px;
+  flex-shrink: 0;
+  background: var(--bg-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.bm-icon.folder-icon {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.bm-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.bm-title {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bm-url {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bm-status {
+  flex-shrink: 0;
+  margin-left: 8px;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+}
+
+.bm-status.available {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.bm-status.unavailable {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.bm-status.checking {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.bm-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
+.bm-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-page);
+}
+
+.bm-count {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
 /* ---- Check Results / Progress ---- */
 
 .check-results {
   margin-top: 4px;
-  min-height: 260px;
-  height: 260px;
+  min-height: 340px;
+  height: 340px;
   overflow: hidden;
   transform: translate3d(0, 0, 0);
   contain: layout size;
@@ -716,7 +869,7 @@ h1 {
 }
 
 .results-container {
-  height: 230px;
+  height: 300px;
   overflow-y: auto;
   margin-top: 8px;
   border-radius: var(--radius-md);
@@ -908,7 +1061,7 @@ h1 {
 }
 
 .footer-brand {
-  font-family: 'DM Serif Display', serif;
+  font-family: Georgia, serif;
   font-size: 11px;
   color: var(--text-muted);
 }
@@ -992,7 +1145,7 @@ h1 {
 
 .modal-header h3 {
   margin: 0;
-  font-family: 'DM Serif Display', 'Noto Sans SC', serif;
+  font-family: Georgia, 'Noto Sans SC', serif;
   font-size: 15px;
   font-weight: 400;
   color: var(--text-primary);
@@ -1172,7 +1325,7 @@ h1 {
 
 .modal-overlay .modal-header h3 {
   margin: 0;
-  font-family: 'DM Serif Display', 'Noto Sans SC', serif;
+  font-family: Georgia, 'Noto Sans SC', serif;
   font-size: 15px;
   font-weight: 400;
   color: var(--text-primary);

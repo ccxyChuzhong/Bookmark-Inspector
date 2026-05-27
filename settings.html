@@ -4,14 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>扩展设置</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Noto+Sans+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/bootstrap-icons.css">
   <link rel="stylesheet" href="./css/settings.css">
 </head>
 <body>
-  <!-- Grain texture overlay -->
   <div class="grain-overlay" aria-hidden="true"></div>
 
   <div class="settings-wrapper">
@@ -28,6 +24,7 @@
         </div>
       </div>
     </header>
+
     <form id="settingsForm">
       <section class="settings-section">
         <div class="section-header">
@@ -37,13 +34,14 @@
         <div class="toggle-row">
           <div class="toggle-info">
             <span class="toggle-label">代理重试</span>
-            <span class="toggle-desc">检测失败时自动通过代理重试</span>
+            <span class="toggle-desc">直连检测失败后自动通过代理重试</span>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="enableProxyRetry">
             <span class="toggle-track"></span>
           </label>
         </div>
+
         <div id="proxyFields" class="proxy-fields">
           <div class="field-group">
             <label for="proxyAddress">代理地址</label>
@@ -53,15 +51,21 @@
             <label for="proxyPort">端口</label>
             <input type="number" id="proxyPort" placeholder="如 7890" min="1" max="65535">
           </div>
-          <div class="field-group">
+          <div class="field-group proxy-type-field">
             <label for="proxyType">类型</label>
-            <div class="select-wrap">
-              <select id="proxyType">
-                <option value="http">HTTP</option>
-                <option value="https">HTTPS</option>
-                <option value="socks5">SOCKS5</option>
-              </select>
-              <i class="bi bi-chevron-down select-icon"></i>
+            <div id="proxyType" class="proxy-type-group" role="radiogroup" aria-label="代理类型">
+              <label class="proxy-type-option">
+                <input type="radio" name="proxyType" value="http">
+                <span>HTTP</span>
+              </label>
+              <label class="proxy-type-option">
+                <input type="radio" name="proxyType" value="https">
+                <span>HTTPS</span>
+              </label>
+              <label class="proxy-type-option">
+                <input type="radio" name="proxyType" value="socks5">
+                <span>SOCKS5</span>
+              </label>
             </div>
           </div>
         </div>
@@ -75,9 +79,66 @@
         </div>
         <div class="field-group">
           <label for="threadsPerBatch">每批检测数量</label>
-          <input type="number" id="threadsPerBatch" min="1" max="20" placeholder="建议 5~15">
+          <input type="number" id="threadsPerBatch" min="1" max="20" placeholder="建议 5 ~ 15">
         </div>
-        <p class="hint-text"><i class="bi bi-info-circle"></i> 根据网络和机器性能，建议设置在 5~15 之间</p>
+        <p class="hint-text"><i class="bi bi-info-circle"></i> 根据网络和机器性能，建议设置在 5 到 15 之间</p>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-header">
+          <div class="section-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+          <h2 class="section-title">WebDAV 同步</h2>
+        </div>
+        <div class="field-group">
+          <label for="webdavUrl">服务器地址</label>
+          <input type="url" id="webdavUrl" placeholder="如 https://dav.jianguoyun.com/dav/">
+        </div>
+        <div class="webdav-auth-fields">
+          <div class="field-group">
+            <label for="webdavUsername">用户名</label>
+            <input type="text" id="webdavUsername" placeholder="WebDAV 用户名">
+          </div>
+          <div class="field-group">
+            <label for="webdavPassword">密码</label>
+            <input type="password" id="webdavPassword" placeholder="WebDAV 密码">
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="webdavPath">远程路径</label>
+          <input type="text" id="webdavPath" placeholder="如 /bookmarks/" value="/bookmarks/">
+        </div>
+
+        <div class="sync-info-card">
+          <div class="sync-info-row">
+            <span class="sync-info-label">远端备份时间</span>
+            <span id="remoteBackupTime" class="sync-info-value">未查询</span>
+          </div>
+          <div class="sync-info-row">
+            <span class="sync-info-label">最近从远端拉取</span>
+            <span id="lastPulledTime" class="sync-info-value">暂无记录</span>
+          </div>
+          <div class="sync-info-row">
+            <span class="sync-info-label">最近备份到远端</span>
+            <span id="lastPushedTime" class="sync-info-value">暂无记录</span>
+          </div>
+        </div>
+
+        <div class="webdav-actions">
+          <button type="button" id="testWebdavBtn" class="ghost-btn">
+            <i class="bi bi-plug"></i> 测试连接
+          </button>
+          <button type="button" id="queryWebdavBtn" class="ghost-btn">
+            <i class="bi bi-search"></i> 查询远端
+          </button>
+          <button type="button" id="webdavBackupBtn" class="ghost-btn">
+            <i class="bi bi-cloud-arrow-up"></i> 备份
+          </button>
+          <button type="button" id="webdavRestoreBtn" class="ghost-btn">
+            <i class="bi bi-cloud-arrow-down"></i> 恢复
+          </button>
+        </div>
+        <div id="webdavTestResult" class="message"></div>
+        <p class="hint-text"><i class="bi bi-info-circle"></i> 支持标准 WebDAV 协议的网盘服务</p>
       </section>
 
       <section class="settings-section settings-actions">
@@ -89,6 +150,7 @@
     </form>
   </div>
 
+  <script src="./js/webdav.js"></script>
   <script src="./js/settings.js"></script>
 </body>
 </html>
