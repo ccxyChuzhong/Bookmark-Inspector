@@ -58,15 +58,15 @@ body {
   background: var(--bg-page);
   color: var(--text-primary);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 /* Wrapper */
 .settings-wrapper {
-  max-width: 420px;
-  margin: 48px auto;
+  max-width: 440px;
+  margin: 20px auto;
   background: var(--bg-surface);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
@@ -78,7 +78,7 @@ body {
 .settings-header {
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-light);
-  padding: 22px 24px;
+  padding: 12px 18px;
 }
 
 .settings-header-inner {
@@ -94,29 +94,30 @@ body {
 }
 
 .settings-header-icon {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   background: var(--accent);
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 16px;
+  font-size: 14px;
   box-shadow: var(--shadow-sm);
 }
 
 .settings-header h1 {
   margin: 0;
   font-family: Georgia, 'Noto Sans SC', serif;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 400;
   color: var(--text-primary);
   letter-spacing: 0.3px;
+  line-height: 1.2;
 }
 
 .settings-subtitle {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-muted);
   letter-spacing: 0.3px;
   margin-top: 1px;
@@ -125,7 +126,7 @@ body {
 
 /* Sections */
 .settings-section {
-  padding: 22px 24px;
+  padding: 12px 18px;
   border-bottom: 1px solid var(--border-light);
 }
 
@@ -136,13 +137,13 @@ body {
 .section-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 7px;
+  margin-bottom: 10px;
 }
 
 .section-icon {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   background: var(--accent-soft);
   border: 1px solid rgba(192, 97, 74, 0.1);
   border-radius: var(--radius-xs);
@@ -150,13 +151,13 @@ body {
   align-items: center;
   justify-content: center;
   color: var(--accent);
-  font-size: 13px;
+  font-size: 12px;
   flex-shrink: 0;
 }
 
 .section-title {
   margin: 0;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -166,8 +167,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .toggle-info {
@@ -177,21 +178,22 @@ body {
 }
 
 .toggle-label {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .toggle-desc {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-muted);
+  line-height: 1.35;
 }
 
 .toggle-switch {
   position: relative;
   display: inline-block;
-  width: 38px;
-  height: 21px;
+  width: 34px;
+  height: 19px;
   flex-shrink: 0;
   cursor: pointer;
 }
@@ -219,8 +221,8 @@ body {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 15px;
-  height: 15px;
+  width: 13px;
+  height: 13px;
   background: #fff;
   border-radius: 50%;
   box-shadow: var(--shadow-sm);
@@ -233,7 +235,7 @@ body {
 }
 
 .toggle-switch input:checked + .toggle-track::before {
-  transform: translateX(17px);
+  transform: translateX(15px);
   background: #fff;
 }
 
@@ -241,8 +243,8 @@ body {
 .field-group {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-bottom: 10px;
+  gap: 3px;
+  margin-bottom: 7px;
 }
 
 .field-group:last-child {
@@ -250,7 +252,7 @@ body {
 }
 
 .field-group label {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--text-secondary);
   letter-spacing: 0.2px;
@@ -258,12 +260,12 @@ body {
 
 .field-group input,
 .field-group select {
-  height: 38px;
-  padding: 0 12px;
+  height: 32px;
+  padding: 0 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--bg-elevated);
-  font-size: 13px;
+  font-size: 12.5px;
   font-family: inherit;
   color: var(--text-primary);
   transition: all var(--duration-fast) var(--ease-out);
@@ -306,13 +308,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 38px;
-  padding: 0 10px;
+  height: 32px;
+  padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   transition: all var(--duration-fast) var(--ease-out);
   box-shadow: var(--shadow-xs);
@@ -352,7 +354,7 @@ body {
 .proxy-fields {
   display: grid;
   grid-template-columns: 5fr 3fr;
-  gap: 10px;
+  gap: 8px;
   align-items: start;
 }
 
@@ -366,17 +368,18 @@ body {
 
 /* Hint text */
 .hint-text {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-top: 10px;
+  margin-top: 6px;
   display: flex;
   align-items: center;
   gap: 5px;
+  line-height: 1.4;
 }
 
 .hint-text i {
   color: var(--accent);
-  font-size: 13px;
+  font-size: 12px;
   opacity: 0.5;
 }
 
@@ -386,8 +389,8 @@ body {
   color: #fff;
   border: none;
   border-radius: var(--radius-md);
-  padding: 10px 18px;
-  font-size: 13px;
+  padding: 8px 16px;
+  font-size: 12.5px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
@@ -402,7 +405,7 @@ body {
 }
 
 .primary-btn i {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .primary-btn:hover {
@@ -418,17 +421,17 @@ body {
 
 /* Settings actions */
 .settings-actions {
-  padding: 18px 24px;
+  padding: 12px 18px;
 }
 
 /* Message */
 .message {
-  margin-top: 12px;
-  padding: 9px 12px;
+  margin-top: 8px;
+  padding: 7px 10px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: 12px;
   display: none;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .message.success {
@@ -465,7 +468,7 @@ button:focus:not(:focus-visible) {
 .webdav-auth-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
   align-items: end;
 }
 
@@ -482,44 +485,42 @@ button:focus:not(:focus-visible) {
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-xs);
-  padding: 10px 12px;
+  padding: 7px 10px;
   display: grid;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 4px;
+  margin-top: 6px;
 }
 
 .sync-info-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
 .sync-info-label {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-secondary);
 }
 
 .sync-info-value {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-primary);
   text-align: right;
 }
 
 /* WebDAV action row */
 .webdav-actions {
-  display: flex;
-  align-items: stretch;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .ghost-btn {
-  flex-shrink: 0;
-  padding: 8px 14px;
+  padding: 6px 8px;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
@@ -528,6 +529,7 @@ button:focus:not(:focus-visible) {
   color: var(--text-secondary);
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   transition: all var(--duration-normal) var(--ease-out);
 }
@@ -538,7 +540,7 @@ button:focus:not(:focus-visible) {
 }
 
 #webdavTestResult {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 @media (max-width: 560px) {
