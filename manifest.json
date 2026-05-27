@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "书签管理器",
+  "name": "__MSG_extName__",
   "version": "3.0.0",
-  "description": "一款支持导入导出和检测书签的工具",
+  "description": "__MSG_extDescription__",
   "permissions": [
     "bookmarks",
     "downloads",
@@ -14,7 +14,7 @@
     "<all_urls>"
   ],
   "action": {
-    "default_title": "书签管理器",
+    "default_title": "__MSG_extName__",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "images/icon16.png",
@@ -34,7 +34,7 @@
     "256": "images/icon256.png"
   },
   "options_page": "settings.html",
-  "default_locale": "en",
+  "default_locale": "zh_CN",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https: http:;"
   }

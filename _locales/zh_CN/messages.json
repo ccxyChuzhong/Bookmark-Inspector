@@ -4,7 +4,7 @@
     "description": "扩展名称"
   },
   "extDescription": {
-    "message": "一款支持导入导出和验证书签的工具",
+    "message": "一款支持导入导出和检测书签的工具",
     "description": "扩展描述"
   }
 }
