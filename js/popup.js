@@ -438,15 +438,17 @@ async function recheckBookmark(bookmarkId) {
   }
 }
 // ... existing code ...
-// 更新计数器函数
+// 更新计数器函数（兼容旧版 UI，现 popup 已无对应 DOM；保留以兼容旧调用点）
 function updateCounters() {
+  if (typeof currentBookmarks === 'undefined' || !Array.isArray(currentBookmarks)) {
+    return;
+  }
   const totalCount = currentBookmarks.length;
   const invalidCount = currentBookmarks.filter(b => b.invalid).length;
-  
-  // 更新显示
+
   const totalCountElement = document.getElementById("totalCount");
   const invalidCountElement = document.getElementById("invalidCount");
-  
+
   if (totalCountElement) totalCountElement.textContent = totalCount;
   if (invalidCountElement) invalidCountElement.textContent = invalidCount;
 }
